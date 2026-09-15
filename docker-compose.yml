@@ -1,0 +1,52 @@
+services:
+  postgres:
+    image: postgres:18-bookworm
+    container_name: confectionery_postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-confectionery}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  migrate:
+    image: migrate/migrate:v4.19.1
+    volumes:
+      - ./backend/migrations:/migrations:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command:
+      - -path=/migrations
+      - -database=postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-confectionery}?sslmode=disable
+      - up
+
+  app:
+    build:
+      context: ./backend
+      dockerfile: cmd/app/Dockerfile
+    env_file:
+      - ./backend/.env.example
+    environment:
+      SERVER_ADDR: ":8080"
+      POSTGRES_HOST: postgres
+      LOGGER_FOLDER: /var/log/confectionery
+    container_name: confectionery_app
+    ports:
+      - "8080:8080"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    volumes:
+      - app_logs:/var/log/confectionery
+
+volumes:
+  postgres_data:
+  app_logs:
