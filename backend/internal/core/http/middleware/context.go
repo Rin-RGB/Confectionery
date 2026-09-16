@@ -2,6 +2,10 @@ package core_middleware
 
 import (
 	"context"
+	"fmt"
+
+	"SPOproject/internal/core/domain"
+	coreerrors "SPOproject/internal/core/errors"
 
 	"github.com/google/uuid"
 )
@@ -9,21 +13,23 @@ import (
 type userIdKey struct{}
 
 func GetUserIdFromCtx(ctx context.Context) (uuid.UUID, error) {
-	userId := ctx.Value(userIdKey{}).(string)
+	userId, ok := ctx.Value(userIdKey{}).(string)
+	if !ok {
+		return uuid.Nil, fmt.Errorf("user id is missing in context: %w", coreerrors.ErrNotAuthorized)
+	}
 	userIdUUID, err := uuid.Parse(userId)
 	if err != nil {
-		return uuid.Nil, err
+		return uuid.Nil, fmt.Errorf("parse user id from context: %w: %w", err, coreerrors.ErrNotAuthorized)
 	}
 	return userIdUUID, nil
 }
 
 type roleKey struct{}
 
-func GetRoleFromCtx(ctx context.Context) (uuid.UUID, error) {
-	companyId := ctx.Value(roleKey{}).(string)
-	companyIdUUID, err := uuid.Parse(companyId)
-	if err != nil {
-		return uuid.Nil, err
+func GetRoleFromCtx(ctx context.Context) (domain.UserRole, error) {
+	role, ok := ctx.Value(roleKey{}).(domain.UserRole)
+	if !ok {
+		return "", fmt.Errorf("user role is missing in context: %w", coreerrors.ErrNotAuthorized)
 	}
-	return companyIdUUID, nil
+	return role, nil
 }

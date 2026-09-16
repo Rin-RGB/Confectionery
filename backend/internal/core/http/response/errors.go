@@ -25,8 +25,9 @@ var errorSlice = []errorValue{
 	{mapError: coreerrors.ErrInvalidRequest, statusCode: http.StatusBadRequest, logLevel: "WARN", error: coreerrors.ErrInvalidRequest.Error()},
 	{mapError: coreerrors.ErrInvalidCredentials, statusCode: http.StatusUnauthorized, logLevel: "WARN", error: coreerrors.ErrInvalidCredentials.Error()},
 	{mapError: coreerrors.ErrNotAuthorized, statusCode: http.StatusUnauthorized, logLevel: "WARN", error: coreerrors.ErrNotAuthorized.Error()},
+	{mapError: coreerrors.ErrExpiredToken, statusCode: http.StatusUnauthorized, logLevel: "WARN", error: coreerrors.ErrExpiredToken.Error()},
 	{mapError: coreerrors.ErrForbidden, statusCode: http.StatusForbidden, logLevel: "WARN", error: coreerrors.ErrForbidden.Error()},
 	{mapError: coreerrors.ErrEmailExists, statusCode: http.StatusConflict, logLevel: "WARN", error: coreerrors.ErrEmailExists.Error()},
 	{mapError: coreerrors.ErrNotImplemented, statusCode: http.StatusNotImplemented, logLevel: "WARN", error: coreerrors.ErrNotImplemented.Error()},
 	{mapError: coreerrors.ErrInternal, statusCode: http.StatusInternalServerError, logLevel: "ERROR", error: coreerrors.ErrInternal.Error()},
-} // ErrExpiredToken
+}

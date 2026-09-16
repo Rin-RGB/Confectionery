@@ -45,6 +45,14 @@ func Logger(logger *core_logger.Logger) Middleware {
 		})
 	}
 }
+func CORS() Middleware {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+
+			next.ServeHTTP(writer, request)
+		})
+	}
+}
 
 func Trace() Middleware {
 	return func(next http.Handler) http.Handler {
@@ -111,7 +119,7 @@ func Auth(roleChecker Parser, roles ...domain.UserRole) Middleware {
 				return
 			}
 			ctx := context.WithValue(r.Context(), userIdKey{}, tokenClaims.UserID)
-			ctx = context.WithValue(r.Context(), roleKey{}, tokenClaims.Role)
+			ctx = context.WithValue(ctx, roleKey{}, tokenClaims.Role)
 			next.ServeHTTP(writer, r.WithContext(ctx))
 		})
 	}

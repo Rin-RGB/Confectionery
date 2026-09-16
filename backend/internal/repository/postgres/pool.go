@@ -1,4 +1,4 @@
-package postgres
+package repository_postgres
 
 import (
 	"SPOproject/internal/core/config"

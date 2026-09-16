@@ -1,13 +1,9 @@
 package auth
 
 import (
-	"fmt"
 	"net/http"
 
-	coreauth "SPOproject/internal/core/auth"
 	"SPOproject/internal/core/domain"
-	coreerrors "SPOproject/internal/core/errors"
-	"SPOproject/internal/core/http/middleware"
 	"SPOproject/internal/core/http/request"
 	"SPOproject/internal/core/http/response"
 	"SPOproject/internal/core/http/server"
@@ -16,14 +12,12 @@ import (
 
 type Handler struct {
 	service   authService
-	provider  tokenProvider
 	validator core_request.Validator
 }
 
-func NewHandler(service authService, provider tokenProvider, validator core_request.Validator) *Handler {
+func NewHandler(service authService, validator core_request.Validator) *Handler {
 	return &Handler{
 		service:   service,
-		provider:  provider,
 		validator: validator,
 	}
 }
@@ -33,12 +27,7 @@ func (h *Handler) Routes() []core_server.Route {
 		{Method: http.MethodPost, Path: "/register", Handler: h.Register},
 		{Method: http.MethodPost, Path: "/login", Handler: h.Login},
 		{Method: http.MethodPost, Path: "/refresh", Handler: h.Refresh},
-		{
-			Method:      http.MethodPost,
-			Path:        "/logout",
-			Handler:     h.Logout,
-			Middlewares: []core_middleware.Middleware{core_middleware.Auth(h.provider, domain.RoleUser)},
-		},
+		{Method: http.MethodPost, Path: "/logout", Handler: h.Logout},
 	}
 }
 
@@ -49,7 +38,7 @@ func (h *Handler) Register(writer *core_response.Writer, httpRequest *http.Reque
 		return
 	}
 
-	user, err := h.service.Register(httpRequest.Context(), domain.Credentials{
+	tokensPair, err := h.service.Register(httpRequest.Context(), domain.Credentials{
 		Email:    body.Email,
 		Password: body.Password,
 	})
@@ -58,13 +47,10 @@ func (h *Handler) Register(writer *core_response.Writer, httpRequest *http.Reque
 		return
 	}
 
-	tokens, err := h.newTokenPair(user)
-	if err != nil {
-		writer.ErrorResponse(err)
-		return
-	}
-
-	writer.WriteJson(http.StatusCreated, tokens)
+	writer.WriteJson(http.StatusCreated, dto.TokenPairResponse{
+		AccessToken:  tokensPair.AccessToken,
+		RefreshToken: tokensPair.RefreshToken,
+	})
 }
 
 func (h *Handler) Login(writer *core_response.Writer, httpRequest *http.Request) {
@@ -74,7 +60,7 @@ func (h *Handler) Login(writer *core_response.Writer, httpRequest *http.Request)
 		return
 	}
 
-	user, err := h.service.Login(httpRequest.Context(), domain.Credentials{
+	tokensPair, err := h.service.Login(httpRequest.Context(), domain.Credentials{
 		Email:    body.Email,
 		Password: body.Password,
 	})
@@ -83,35 +69,42 @@ func (h *Handler) Login(writer *core_response.Writer, httpRequest *http.Request)
 		return
 	}
 
-	tokens, err := h.newTokenPair(user)
+	writer.WriteJson(http.StatusOK, dto.TokenPairResponse{
+		AccessToken:  tokensPair.AccessToken,
+		RefreshToken: tokensPair.RefreshToken,
+	})
+}
+
+func (h *Handler) Refresh(writer *core_response.Writer, httpRequest *http.Request) {
+	var body dto.RefreshRequest
+	if err := core_request.DecodeAndValidate(httpRequest, &body, h.validator); err != nil {
+		writer.ErrorResponse(err)
+		return
+	}
+
+	tokensPair, err := h.service.Refresh(httpRequest.Context(), body.RefreshToken)
 	if err != nil {
 		writer.ErrorResponse(err)
 		return
 	}
 
-	writer.WriteJson(http.StatusOK, tokens)
+	writer.WriteJson(http.StatusOK, dto.TokenPairResponse{
+		AccessToken:  tokensPair.AccessToken,
+		RefreshToken: tokensPair.RefreshToken,
+	})
 }
 
-func (h *Handler) newTokenPair(user domain.User) (dto.TokenPairResponse, error) {
-	accessToken, err := h.provider.NewToken(user, coreauth.AccessType)
-	if err != nil {
-		return dto.TokenPairResponse{}, fmt.Errorf("create access token: %w", err)
+func (h *Handler) Logout(writer *core_response.Writer, httpRequest *http.Request) {
+	var body dto.RefreshRequest
+	if err := core_request.DecodeAndValidate(httpRequest, &body, h.validator); err != nil {
+		writer.ErrorResponse(err)
+		return
 	}
-	refreshToken, err := h.provider.NewToken(user, coreauth.RefreshType)
-	if err != nil {
-		return dto.TokenPairResponse{}, fmt.Errorf("create refresh token: %w", err)
+
+	if err := h.service.Logout(httpRequest.Context(), body.RefreshToken); err != nil {
+		writer.ErrorResponse(err)
+		return
 	}
 
-	return dto.TokenPairResponse{
-		AccessToken:  accessToken,
-		RefreshToken: refreshToken,
-	}, nil
-}
-
-func (h *Handler) Refresh(writer *core_response.Writer, r *http.Request) {
-	writer.ErrorResponse(coreerrors.ErrNotImplemented)
-}
-
-func (h *Handler) Logout(writer *core_response.Writer, r *http.Request) {
-	writer.ErrorResponse(coreerrors.ErrNotImplemented)
+	writer.WriteHeader(http.StatusNoContent)
 }

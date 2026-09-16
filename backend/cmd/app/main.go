@@ -18,7 +18,7 @@ import (
 	handlerauth "SPOproject/internal/handlers/auth"
 	handlerfillings "SPOproject/internal/handlers/fillings"
 	handlerorders "SPOproject/internal/handlers/orders"
-	"SPOproject/internal/repository/postgres"
+	postgres "SPOproject/internal/repository/postgres"
 	repositoryfillings "SPOproject/internal/repository/postgres/fillings"
 	repositoryorders "SPOproject/internal/repository/postgres/orders"
 	repositoryusers "SPOproject/internal/repository/postgres/users"
@@ -63,18 +63,19 @@ func main() {
 		cfg.AuthCfg.RefreshTokenTTL,
 	)
 
-	usersRepository := repositoryusers.NewRepository(pool, cfg.DbConfig.Timeout)
+	txManager := postgres.NewTxManager(pool, cfg.DbConfig.Timeout)
+	usersRepository := repositoryusers.NewRepository(txManager)
 	fillingsRepository := repositoryfillings.NewRepository()
 	ordersRepository := repositoryorders.NewRepository()
 	paymentClient := transportpayment.NewClient()
 
-	authService := serviceauth.NewService(usersRepository, passwordHasher)
+	authService := serviceauth.NewService(usersRepository, passwordHasher, tokenProvider, txManager)
 	fillingsService := servicefillings.NewService(fillingsRepository)
 	paymentService := servicepayments.NewService(paymentClient)
 	ordersService := serviceorders.NewService(ordersRepository, fillingsRepository, paymentService)
 	requestValidator := validator.New()
 
-	authHandler := handlerauth.NewHandler(authService, tokenProvider, requestValidator)
+	authHandler := handlerauth.NewHandler(authService, requestValidator)
 	fillingsHandler := handlerfillings.NewHandler(fillingsService, tokenProvider)
 	ordersHandler := handlerorders.NewHandler(ordersService, tokenProvider)
 

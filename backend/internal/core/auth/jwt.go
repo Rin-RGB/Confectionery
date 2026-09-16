@@ -1,14 +1,15 @@
 package auth
 
 import (
-	core_errors "SPOproject/internal/core/errors"
 	"errors"
 	"fmt"
 	"time"
 
 	"SPOproject/internal/core/domain"
+	core_errors "SPOproject/internal/core/errors"
 
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/google/uuid"
 )
 
 type TokenType string
@@ -38,11 +39,21 @@ func NewJWTProvider(signingKey string, accessTokenTTL, refreshTokenTTL time.Dura
 		refreshTokenTTL: refreshTokenTTL,
 	}
 }
-func (p *JWTProvider) NewToken(user domain.User, tokenType TokenType) (string, error) {
+func (p *JWTProvider) NewTokenWithClaims(user domain.User, tokenType TokenType) (string, Claims, error) {
 	if tokenType == AccessType {
 		return p.newToken(user, tokenType, p.accessTokenTTL)
 	} else if tokenType == RefreshType {
 		return p.newToken(user, tokenType, p.refreshTokenTTL)
+	}
+	return "", Claims{}, fmt.Errorf("wrong token type: %w", core_errors.ErrInternal)
+}
+func (p *JWTProvider) NewToken(user domain.User, tokenType TokenType) (string, error) {
+	if tokenType == AccessType {
+		token, _, err := p.newToken(user, tokenType, p.accessTokenTTL)
+		return token, err
+	} else if tokenType == RefreshType {
+		token, _, err := p.newToken(user, tokenType, p.refreshTokenTTL)
+		return token, err
 	}
 	return "", fmt.Errorf("wrong token type: %w", core_errors.ErrInternal)
 }
@@ -51,7 +62,7 @@ func (p *JWTProvider) ParseToken(tokenString string, tokenType TokenType) (Claim
 	tokenClaims := Claims{}
 	token, err := jwt.ParseWithClaims(tokenString, &tokenClaims, func(token *jwt.Token) (any, error) {
 		if token.Method != jwt.SigningMethodHS256 {
-			return nil, fmt.Errorf("wrong signing method: %v: %w", token.Header["alg"], core_errors.ErrInvalidRequest)
+			return nil, fmt.Errorf("wrong signing method: %v: %w", token.Header["alg"], core_errors.ErrNotAuthorized)
 		}
 		return p.signingKey, nil
 	})
@@ -59,18 +70,18 @@ func (p *JWTProvider) ParseToken(tokenString string, tokenType TokenType) (Claim
 		if errors.Is(err, jwt.ErrTokenExpired) {
 			return Claims{}, fmt.Errorf("invalid token: %w", core_errors.ErrExpiredToken)
 		}
-		return Claims{}, fmt.Errorf("parse token: %w: %w", err, core_errors.ErrInvalidRequest)
+		return Claims{}, fmt.Errorf("parse token: %v: %w", err, core_errors.ErrNotAuthorized)
 	}
 	if !token.Valid {
-		return Claims{}, fmt.Errorf("invalid token: %w", core_errors.ErrInvalidRequest)
+		return Claims{}, fmt.Errorf("invalid token: %w", core_errors.ErrNotAuthorized)
 	}
 	if tokenClaims.Type != tokenType {
-		return Claims{}, fmt.Errorf("invalid token: wrong token type: %w", core_errors.ErrInvalidRequest)
+		return Claims{}, fmt.Errorf("invalid token: wrong token type: %w", core_errors.ErrNotAuthorized)
 	}
 	return tokenClaims, nil
 }
 
-func (p *JWTProvider) newToken(user domain.User, tokenType TokenType, ttl time.Duration) (string, error) {
+func (p *JWTProvider) newToken(user domain.User, tokenType TokenType, ttl time.Duration) (string, Claims, error) {
 	now := time.Now().UTC()
 	claims := Claims{
 		UserID: user.ID.String(),
@@ -80,11 +91,12 @@ func (p *JWTProvider) newToken(user domain.User, tokenType TokenType, ttl time.D
 			IssuedAt:  jwt.NewNumericDate(now),
 			ExpiresAt: jwt.NewNumericDate(now.Add(ttl)),
 			Subject:   user.ID.String(),
+			ID:        uuid.NewString(),
 		},
 	}
 	token, err := jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString(p.signingKey)
 	if err != nil {
-		return "", fmt.Errorf("sign token: %w", err)
+		return "", Claims{}, fmt.Errorf("sign token: %w", err)
 	}
-	return token, nil
+	return token, claims, nil
 }

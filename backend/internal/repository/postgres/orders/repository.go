@@ -1,4 +1,4 @@
-package orders
+package repository_orders
 
 import (
 	"context"
