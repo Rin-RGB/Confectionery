@@ -1,0 +1,840 @@
+basePath: /
+definitions:
+  core_response.Error:
+    properties:
+      code:
+        example: invalid request
+        type: string
+      message:
+        example: invalid companyId path parameter
+        type: string
+    type: object
+  core_response.ErrorResponse:
+    properties:
+      error:
+        $ref: '#/definitions/core_response.Error'
+    type: object
+  domain.OrderStatus:
+    enum:
+    - accepted
+    - processing
+    - ready
+    - cancelled
+    type: string
+    x-enum-varnames:
+    - OrderStatusAccepted
+    - OrderStatusProcessing
+    - OrderStatusReady
+    - OrderStatusCancelled
+  dto.CalculatePriceRequest:
+    properties:
+      fillings:
+        items:
+          $ref: '#/definitions/dto.PriceFillingRequest'
+        minItems: 1
+        type: array
+    required:
+    - fillings
+    type: object
+  dto.CreateFillingRequest:
+    properties:
+      description:
+        type: string
+      image_name:
+        example: filling1.png
+        type: string
+      name:
+        maxLength: 150
+        minLength: 1
+        type: string
+      price:
+        example: 1200
+        minimum: 0.01
+        type: number
+    required:
+    - name
+    - price
+    type: object
+  dto.CreateOrderRequest:
+    properties:
+      decoration_wishes:
+        type: string
+      delivery_address:
+        example: Москва, ул. Примерная, 10
+        minLength: 1
+        type: string
+      fillings:
+        items:
+          $ref: '#/definitions/dto.PriceFillingRequest'
+        minItems: 1
+        type: array
+    required:
+    - delivery_address
+    - fillings
+    type: object
+  dto.FillingResponse:
+    properties:
+      description:
+        type: string
+      id:
+        format: uuid
+        type: string
+      image_name:
+        example: filling1.png
+        type: string
+      is_active:
+        type: boolean
+      name:
+        maxLength: 150
+        type: string
+      price:
+        example: 1200
+        minimum: 0.01
+        type: number
+    type: object
+  dto.LoginRequest:
+    properties:
+      email:
+        example: user@example.com
+        format: email
+        type: string
+      password:
+        example: password123
+        minLength: 3
+        type: string
+    required:
+    - email
+    - password
+    type: object
+  dto.OrderFillingResponse:
+    properties:
+      id:
+        format: uuid
+        type: string
+      name:
+        type: string
+      price_per_kg:
+        minimum: 0.01
+        type: number
+      weight_grams:
+        maximum: 7000
+        minimum: 1
+        type: integer
+    type: object
+  dto.OrderResponse:
+    properties:
+      created_at:
+        type: string
+      decoration_wishes:
+        type: string
+      delivery_address:
+        type: string
+      fillings:
+        items:
+          $ref: '#/definitions/dto.OrderFillingResponse'
+        type: array
+      id:
+        format: uuid
+        type: string
+      status:
+        allOf:
+        - $ref: '#/definitions/domain.OrderStatus'
+        enum:
+        - accepted
+        - processing
+        - ready
+        - cancelled
+      total_price:
+        minimum: 0
+        type: number
+      updated_at:
+        type: string
+      user_id:
+        format: uuid
+        type: string
+      weight_grams:
+        maximum: 7000
+        minimum: 1000
+        type: integer
+    type: object
+  dto.OrderSummaryResponse:
+    properties:
+      id:
+        format: uuid
+        type: string
+      status:
+        allOf:
+        - $ref: '#/definitions/domain.OrderStatus'
+        enum:
+        - accepted
+        - processing
+        - ready
+        - cancelled
+      total_price:
+        minimum: 0
+        type: number
+    type: object
+  dto.PriceFillingRequest:
+    properties:
+      name:
+        example: Шоколадная
+        minLength: 1
+        type: string
+      weight_grams:
+        example: 1500
+        maximum: 7000
+        minimum: 1
+        type: integer
+    required:
+    - name
+    - weight_grams
+    type: object
+  dto.PriceResponse:
+    properties:
+      amount:
+        example: 1800
+        minimum: 0
+        type: number
+    type: object
+  dto.RefreshRequest:
+    properties:
+      refresh_token:
+        type: string
+    required:
+    - refresh_token
+    type: object
+  dto.RegisterRequest:
+    properties:
+      email:
+        example: user@example.com
+        format: email
+        type: string
+      password:
+        example: password123
+        minLength: 3
+        type: string
+    required:
+    - email
+    - password
+    type: object
+  dto.TokenPairResponse:
+    properties:
+      access_token:
+        type: string
+      refresh_token:
+        type: string
+    type: object
+  dto.UpdateFillingRequest:
+    properties:
+      description:
+        type: string
+      image_name:
+        example: filling1.png
+        type: string
+      is_active:
+        type: boolean
+      name:
+        maxLength: 150
+        minLength: 1
+        type: string
+      price:
+        example: 1200
+        minimum: 0.01
+        type: number
+    type: object
+  dto.UpdateOrderStatusRequest:
+    properties:
+      status:
+        allOf:
+        - $ref: '#/definitions/domain.OrderStatus'
+        enum:
+        - accepted
+        - processing
+        - ready
+        - cancelled
+    required:
+    - status
+    type: object
+info:
+  contact: {}
+  description: API для авторизации, управления начинками и заказами кондитерской.
+  title: Confectionery API
+  version: "1.0"
+paths:
+  /api/v1/fillings:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/dto.FillingResponse'
+            type: array
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/core_response.ErrorResponse'
+      summary: Получение активных начинок
+      tags:
+      - fillings
+    post:
+      consumes:
+      - application/json
+      description: Доступно только администратору.
+      parameters:
+      - description: Новая начинка
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.CreateFillingRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/dto.FillingResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/core_response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/core_response.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/core_response.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/core_response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Создание начинки
+      tags:
+      - fillings
+  /api/v1/fillings/{fillingId}:
+    delete:
+      description: Доступно только администратору. Начинка помечается неактивной.
+      parameters:
+      - description: UUID начинки
+        format: uuid
+        in: path
+        name: fillingId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/core_response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/core_response.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/core_response.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/core_response.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/core_response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Скрытие начинки
+      tags:
+      - fillings
+    get:
+      parameters:
+      - description: UUID начинки
+        format: uuid
+        in: path
+        name: fillingId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.FillingResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/core_response.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/core_response.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/core_response.ErrorResponse'
+      summary: Получение начинки
+      tags:
+      - fillings
+    patch:
+      consumes:
+      - application/json
+      description: Доступно только администратору. Пустой JSON-объект возвращает начинку
+        без изменений.
+      parameters:
+      - description: UUID начинки
+        format: uuid
+        in: path
+        name: fillingId
+        required: true
+        type: string
+      - description: Изменяемые поля
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.UpdateFillingRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.FillingResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/core_response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/core_response.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/core_response.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/core_response.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/core_response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Изменение начинки
+      tags:
+      - fillings
+  /api/v1/login:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Учётные данные
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.LoginRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.TokenPairResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/core_response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/core_response.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/core_response.ErrorResponse'
+      summary: Вход пользователя
+      tags:
+      - auth
+  /api/v1/logout:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Refresh-токен
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.RefreshRequest'
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/core_response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/core_response.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/core_response.ErrorResponse'
+      summary: Выход пользователя
+      tags:
+      - auth
+  /api/v1/orders:
+    get:
+      description: Доступно только администратору. Без type возвращаются все заказы.
+      parameters:
+      - description: Фильтр по статусу заказа
+        enum:
+        - accepted
+        - processing
+        - ready
+        - cancelled
+        in: query
+        name: type
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/dto.OrderSummaryResponse'
+            type: array
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/core_response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/core_response.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/core_response.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/core_response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Получение всех заказов
+      tags:
+      - orders
+    post:
+      consumes:
+      - application/json
+      description: Цена рассчитывается на сервере. При ретраях клиент повторно использует
+        тот же Idempotency-Key.
+      parameters:
+      - description: UUID идемпотентности, созданный клиентом
+        format: uuid
+        in: header
+        name: Idempotency-Key
+        required: true
+        type: string
+      - description: Данные заказа
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.CreateOrderRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/dto.OrderResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/core_response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/core_response.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/core_response.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/core_response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Создание заказа
+      tags:
+      - orders
+  /api/v1/orders/{orderId}:
+    get:
+      description: Пользователь может получить только собственный заказ.
+      parameters:
+      - description: UUID заказа
+        format: uuid
+        in: path
+        name: orderId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.OrderResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/core_response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/core_response.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/core_response.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/core_response.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/core_response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Получение заказа
+      tags:
+      - orders
+  /api/v1/orders/{orderId}/status:
+    patch:
+      consumes:
+      - application/json
+      description: Доступно только администратору.
+      parameters:
+      - description: UUID заказа
+        format: uuid
+        in: path
+        name: orderId
+        required: true
+        type: string
+      - description: Новый статус
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.UpdateOrderStatusRequest'
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/core_response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/core_response.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/core_response.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/core_response.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/core_response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Изменение статуса заказа
+      tags:
+      - orders
+  /api/v1/orders/my:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/dto.OrderSummaryResponse'
+            type: array
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/core_response.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/core_response.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/core_response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Получение заказов текущего пользователя
+      tags:
+      - orders
+  /api/v1/orders/price:
+    post:
+      consumes:
+      - application/json
+      description: Суммарный вес начинок должен составлять от 1000 до 7000 граммов.
+      parameters:
+      - description: Начинки и их вес
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.CalculatePriceRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.PriceResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/core_response.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/core_response.ErrorResponse'
+      summary: Расчёт стоимости заказа
+      tags:
+      - orders
+  /api/v1/refresh:
+    post:
+      consumes:
+      - application/json
+      description: Валидирует refresh-токен, инвалидирует использованную сессию и
+        возвращает новую пару токенов.
+      parameters:
+      - description: Refresh-токен
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.RefreshRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.TokenPairResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/core_response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/core_response.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/core_response.ErrorResponse'
+      summary: Обновление пары токенов
+      tags:
+      - auth
+  /api/v1/register:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Учётные данные
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.RegisterRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/dto.TokenPairResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/core_response.ErrorResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/core_response.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/core_response.ErrorResponse'
+      summary: Регистрация пользователя
+      tags:
+      - auth
+  /static/fillings/{fileName}:
+    get:
+      parameters:
+      - description: Имя файла из image_name
+        in: path
+        name: fileName
+        required: true
+        type: string
+      produces:
+      - image/png
+      - image/jpeg
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: file
+        "404":
+          description: Not Found
+      summary: Получение изображения начинки
+      tags:
+      - static
+schemes:
+- http
+- https
+securityDefinitions:
+  BearerAuth:
+    description: 'Access-токен в формате: Bearer {token}'
+    in: header
+    name: Authorization
+    type: apiKey
+swagger: "2.0"

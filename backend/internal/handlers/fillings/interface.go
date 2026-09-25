@@ -7,9 +7,9 @@ import (
 )
 
 type fillingService interface {
-	List(ctx context.Context) ([]domain.Filling, error)
-	GetByID(ctx context.Context, fillingID string) (domain.Filling, error)
-	Create(ctx context.Context, filling domain.Filling) (domain.Filling, error)
-	Update(ctx context.Context, fillingID string, patch domain.FillingPatch) (domain.Filling, error)
-	Hide(ctx context.Context, fillingID string) error
+	GetFillings(ctx context.Context) ([]domain.Filling, error)
+	GetFillingByID(ctx context.Context, fillingID string) (domain.Filling, error)
+	CreateFilling(ctx context.Context, filling domain.Filling) (domain.Filling, error)
+	UpdateFilling(ctx context.Context, fillingID string, patch domain.FillingPatch) (domain.Filling, error)
+	HideFilling(ctx context.Context, fillingID string) error
 }

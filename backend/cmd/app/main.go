@@ -8,6 +8,7 @@ import (
 	"os/signal"
 	"syscall"
 
+	_ "SPOproject/docs"
 	coreauth "SPOproject/internal/core/auth"
 	"SPOproject/internal/core/config"
 	corehash "SPOproject/internal/core/hash"
@@ -25,13 +26,28 @@ import (
 	serviceauth "SPOproject/internal/service/auth"
 	servicefillings "SPOproject/internal/service/fillings"
 	serviceorders "SPOproject/internal/service/orders"
-	servicepayments "SPOproject/internal/service/payments"
-	transportpayment "SPOproject/internal/transport/payment"
 
 	"github.com/go-playground/validator/v10"
 	"go.uber.org/zap"
 )
 
+// @title Confectionery API
+// @version 1.0
+// @description API для авторизации, управления начинками и заказами кондитерской.
+// @BasePath /
+// @schemes http https
+// @securityDefinitions.apikey BearerAuth
+// @in header
+// @name Authorization
+// @description Access-токен в формате: Bearer {token}
+// @tag.name auth
+// @tag.description Регистрация, вход и управление JWT-токенами.
+// @tag.name fillings
+// @tag.description Получение и управление начинками.
+// @tag.name orders
+// @tag.description Расчёт стоимости и управление заказами.
+// @tag.name static
+// @tag.description Получение статических изображений.
 func main() {
 	cfg := config.NewConfigMust()
 
@@ -65,19 +81,17 @@ func main() {
 
 	txManager := postgres.NewTxManager(pool, cfg.DbConfig.Timeout)
 	usersRepository := repositoryusers.NewRepository(txManager)
-	fillingsRepository := repositoryfillings.NewRepository()
-	ordersRepository := repositoryorders.NewRepository()
-	paymentClient := transportpayment.NewClient()
+	fillingsRepository := repositoryfillings.NewRepository(txManager)
+	ordersRepository := repositoryorders.NewRepository(txManager)
 
 	authService := serviceauth.NewService(usersRepository, passwordHasher, tokenProvider, txManager)
 	fillingsService := servicefillings.NewService(fillingsRepository)
-	paymentService := servicepayments.NewService(paymentClient)
-	ordersService := serviceorders.NewService(ordersRepository, fillingsRepository, paymentService)
+	ordersService := serviceorders.NewService(ordersRepository, fillingsRepository, txManager)
 	requestValidator := validator.New()
 
 	authHandler := handlerauth.NewHandler(authService, requestValidator)
-	fillingsHandler := handlerfillings.NewHandler(fillingsService, tokenProvider)
-	ordersHandler := handlerorders.NewHandler(ordersService, tokenProvider)
+	fillingsHandler := handlerfillings.NewHandler(fillingsService, tokenProvider, requestValidator)
+	ordersHandler := handlerorders.NewHandler(ordersService, tokenProvider, requestValidator)
 
 	routerV1 := coreserver.NewAPIVersionRouter(coreserver.Version1)
 	routerV1.ChainRoutes(handlers.GetAllRoutes(

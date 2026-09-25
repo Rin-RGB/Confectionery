@@ -1,11 +1,14 @@
 package core_server
 
 import (
-	core_middleware "SPOproject/internal/core/http/middleware"
 	"net/http"
 
 	"SPOproject/internal/core/config"
 	corehandler "SPOproject/internal/core/http/handler"
+	core_middleware "SPOproject/internal/core/http/middleware"
+	corestatic "SPOproject/internal/static"
+
+	httpSwagger "github.com/swaggo/http-swagger/v2"
 )
 
 type Route struct {
@@ -27,6 +30,8 @@ func New(config config.ServerConfig, routers []*Router, middlewares ...core_midd
 
 func registerRouters(routers ...*Router) *http.ServeMux {
 	mux := http.NewServeMux()
+	mux.Handle("GET /static/", http.StripPrefix("/static/", corestatic.Handler()))
+	mux.Handle("GET /swagger/", httpSwagger.WrapHandler)
 
 	for _, router := range routers {
 		prefix := "/api/" + string(router.version)

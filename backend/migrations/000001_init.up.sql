@@ -39,10 +39,10 @@ CREATE TABLE fillings (
 
                           description TEXT,
 
-                          price_per_kg BIGINT NOT NULL
+                          price_per_kg NUMERIC(12, 2) NOT NULL
                               CHECK (price_per_kg > 0),
 
-                          image_url TEXT,
+                          image_name TEXT,
                           is_active BOOLEAN NOT NULL DEFAULT TRUE,
 
                           created_at TIMESTAMPTZ NOT NULL DEFAULT now()
@@ -65,7 +65,7 @@ CREATE TABLE orders (
                         delivery_address TEXT NOT NULL
                             CHECK (btrim(delivery_address) <> ''),
 
-                        total_price BIGINT NOT NULL
+                        total_price NUMERIC(12, 2) NOT NULL
                             CHECK (total_price > 0),
 
                         status VARCHAR(20) NOT NULL DEFAULT 'accepted'
@@ -95,8 +95,11 @@ CREATE TABLE order_fillings (
                                 filling_name VARCHAR(150) NOT NULL
                                     CHECK (btrim(filling_name) <> ''),
 
-                                filling_price_per_kg BIGINT NOT NULL
+                                filling_price_per_kg NUMERIC(12, 2) NOT NULL
                                     CHECK (filling_price_per_kg > 0),
+
+                                weight_grams INTEGER NOT NULL
+                                    CHECK (weight_grams BETWEEN 1 AND 7000),
 
                                 PRIMARY KEY (order_id, filling_id)
 );

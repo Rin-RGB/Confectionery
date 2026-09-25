@@ -5,39 +5,49 @@ import "time"
 type OrderStatus string
 
 const (
-	OrderStatusNew       OrderStatus = "new"
-	OrderStatusPreparing OrderStatus = "preparing"
-	OrderStatusReady     OrderStatus = "ready"
-	OrderStatusDelivered OrderStatus = "delivered"
-	OrderStatusCancelled OrderStatus = "cancelled"
+	OrderStatusAccepted   OrderStatus = "accepted"
+	OrderStatusProcessing OrderStatus = "processing"
+	OrderStatusReady      OrderStatus = "ready"
+	OrderStatusCancelled  OrderStatus = "cancelled"
 )
 
 type OrderDraft struct {
-	FillingID  string
-	WeightKG   int
-	Decoration string
-	Address    string
+	IdempotencyKey   string
+	Fillings         []FillingWeight
+	DecorationWishes string
+	DeliveryAddress  string
 }
 
 type PriceCalculation struct {
-	FillingID string
-	WeightKG  int
+	Fillings []FillingWeight
+}
+
+type FillingWeight struct {
+	Name        string
+	WeightGrams int
 }
 
 type Price struct {
-	Amount   int64
-	Currency string
+	Amount float64
 }
 
 type Order struct {
-	ID         string
-	UserID     string
-	FillingID  string
-	WeightKG   int
-	Decoration string
-	Address    string
-	Price      Price
-	Status     OrderStatus
-	CreatedAt  time.Time
-	UpdatedAt  time.Time
+	ID               string
+	UserID           string
+	IdempotencyKey   string
+	Fillings         []OrderFilling
+	WeightGrams      int
+	DecorationWishes string
+	DeliveryAddress  string
+	TotalPrice       float64
+	Status           OrderStatus
+	CreatedAt        time.Time
+	UpdatedAt        time.Time
+}
+
+type OrderFilling struct {
+	ID          string
+	Name        string
+	PricePerKG  float64
+	WeightGrams int
 }

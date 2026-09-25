@@ -10,5 +10,8 @@ var (
 	ErrNotAuthorized      = errors.New("not authorized")
 	ErrForbidden          = errors.New("forbidden")
 	ErrInternal           = errors.New("internal server error")
+	ErrInvalidToken       = errors.New("invalid token")
 	ErrExpiredToken       = errors.New("token is expired")
+	ErrFillingNotFound    = errors.New("filling not found")
+	ErrOrderNotFound      = errors.New("order not found")
 )

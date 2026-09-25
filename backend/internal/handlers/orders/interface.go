@@ -8,9 +8,9 @@ import (
 
 type orderService interface {
 	CalculatePrice(ctx context.Context, calculation domain.PriceCalculation) (domain.Price, error)
-	Create(ctx context.Context, userID string, draft domain.OrderDraft) (domain.Order, error)
-	GetMy(ctx context.Context, userID string) ([]domain.Order, error)
-	GetByID(ctx context.Context, actorID, orderID string, role domain.UserRole) (domain.Order, error)
-	List(ctx context.Context) ([]domain.Order, error)
+	CreateOrder(ctx context.Context, userID string, draft domain.OrderDraft) (domain.Order, error)
+	GetMyOrders(ctx context.Context, userID string) ([]domain.Order, error)
+	GetOrderByID(ctx context.Context, userID, orderID string) (domain.Order, error)
+	GetOrders(ctx context.Context, status *domain.OrderStatus) ([]domain.Order, error)
 	UpdateStatus(ctx context.Context, orderID string, status domain.OrderStatus) error
 }

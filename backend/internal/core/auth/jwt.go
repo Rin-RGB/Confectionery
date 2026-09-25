@@ -62,21 +62,21 @@ func (p *JWTProvider) ParseToken(tokenString string, tokenType TokenType) (Claim
 	tokenClaims := Claims{}
 	token, err := jwt.ParseWithClaims(tokenString, &tokenClaims, func(token *jwt.Token) (any, error) {
 		if token.Method != jwt.SigningMethodHS256 {
-			return nil, fmt.Errorf("wrong signing method: %v: %w", token.Header["alg"], core_errors.ErrNotAuthorized)
+			return nil, fmt.Errorf("wrong signing method: %v: %w", token.Header["alg"], core_errors.ErrInvalidToken)
 		}
 		return p.signingKey, nil
 	})
 	if err != nil {
-		if errors.Is(err, jwt.ErrTokenExpired) {
+		if errors.Is(err, jwt.ErrTokenExpired) && !errors.Is(err, jwt.ErrTokenSignatureInvalid) {
 			return Claims{}, fmt.Errorf("invalid token: %w", core_errors.ErrExpiredToken)
 		}
-		return Claims{}, fmt.Errorf("parse token: %v: %w", err, core_errors.ErrNotAuthorized)
+		return Claims{}, fmt.Errorf("parse token: %v: %w", err, core_errors.ErrInvalidToken)
 	}
 	if !token.Valid {
-		return Claims{}, fmt.Errorf("invalid token: %w", core_errors.ErrNotAuthorized)
+		return Claims{}, core_errors.ErrInvalidToken
 	}
 	if tokenClaims.Type != tokenType {
-		return Claims{}, fmt.Errorf("invalid token: wrong token type: %w", core_errors.ErrNotAuthorized)
+		return Claims{}, fmt.Errorf("wrong token type: expected %q, got %q: %w", tokenType, tokenClaims.Type, core_errors.ErrInvalidToken)
 	}
 	return tokenClaims, nil
 }

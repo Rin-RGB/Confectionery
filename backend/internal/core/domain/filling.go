@@ -4,15 +4,15 @@ type Filling struct {
 	ID          string
 	Name        string
 	Description string
-	Price       int64
-	ImageURL    string
+	Price       float64
+	ImageName   string
 	IsActive    bool
 }
 
 type FillingPatch struct {
 	Name        *string
 	Description *string
-	Price       *int64
-	ImageURL    *string
+	Price       *float64
+	ImageName   *string
 	IsActive    *bool
 }
