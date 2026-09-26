@@ -591,9 +591,17 @@ async function handleMockPayment() {
 
         <section className="content-section filling-section" id="filling">
           <div className="section-heading">
-            <div>
-              <h2>Выберите начинку</h2>
-            </div>
+              {role === "admin" && (
+                <div>
+                  <h2>Начинки</h2>
+                </div>
+              )}
+              {role !== "admin" && (
+                <div>
+                  <h2>Выберите начинку</h2>
+                </div>
+              )}
+
 
             {/* {role === "admin" && (
               <button className="button button-light" onClick={() => setAddOpen(true)}>
