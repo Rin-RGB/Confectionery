@@ -28,7 +28,7 @@ func (h *Handler) Routes() []core_server.Route {
 		{Method: http.MethodPost, Path: "/orders/price", Handler: h.CalculatePrice},
 		{Method: http.MethodPost, Path: "/orders", Handler: h.CreateOrder, Middlewares: userOnly},
 		{Method: http.MethodGet, Path: "/orders/my", Handler: h.GetMyOrders, Middlewares: userOnly},
-		{Method: http.MethodGet, Path: "/orders/{orderId}", Handler: h.GetOrder, Middlewares: userOnly},
+		{Method: http.MethodGet, Path: "/orders/{orderId}", Handler: h.GetOrder, Middlewares: adminOnly},
 		{Method: http.MethodGet, Path: "/orders", Handler: h.GetOrders, Middlewares: adminOnly},
 		{Method: http.MethodPatch, Path: "/orders/{orderId}/status", Handler: h.UpdateOrderStatus, Middlewares: adminOnly},
 	}
