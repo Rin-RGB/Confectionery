@@ -1,0 +1,7 @@
+.DS_Store
+frontend/node_modules
+frontend/.DS_Store
+frontend/.env.example
+frontend/package-lock.json
+frontend/package.json
+frontend/vite.config.js
