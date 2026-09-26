@@ -22,6 +22,7 @@ type ServerConfig struct {
 	Addr              string        `envconfig:"SERVER_ADDR" default:":8080"`
 	ReadHeaderTimeout time.Duration `envconfig:"SERVER_READ_HEADER_TIMEOUT" default:"5s"`
 	ShutdownTimeout   time.Duration `envconfig:"SERVER_SHUTDOWN_TIMEOUT" default:"5s"`
+	StaticFilesFolder string        `envconfig:"STATIC_FILES_FOLDER" default:"./internal/static/files"`
 }
 
 type DatabaseConfig struct {

@@ -50,7 +50,7 @@ const docTemplate = `{
                 ],
                 "description": "Доступно только администратору.",
                 "consumes": [
-                    "application/json"
+                    "multipart/form-data"
                 ],
                 "produces": [
                     "application/json"
@@ -61,13 +61,31 @@ const docTemplate = `{
                 "summary": "Создание начинки",
                 "parameters": [
                     {
-                        "description": "Новая начинка",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/dto.CreateFillingRequest"
-                        }
+                        "type": "string",
+                        "description": "Название начинки",
+                        "name": "name",
+                        "in": "formData",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Описание начинки",
+                        "name": "description",
+                        "in": "formData"
+                    },
+                    {
+                        "type": "number",
+                        "description": "Цена за килограмм",
+                        "name": "price",
+                        "in": "formData",
+                        "required": true
+                    },
+                    {
+                        "type": "file",
+                        "description": "Изображение начинки в формате PNG (до 8 МБ)",
+                        "name": "image",
+                        "in": "formData",
+                        "required": true
                     }
                 ],
                 "responses": {
@@ -935,32 +953,6 @@ const docTemplate = `{
                     "items": {
                         "$ref": "#/definitions/dto.PriceFillingRequest"
                     }
-                }
-            }
-        },
-        "dto.CreateFillingRequest": {
-            "type": "object",
-            "required": [
-                "name",
-                "price"
-            ],
-            "properties": {
-                "description": {
-                    "type": "string"
-                },
-                "image_name": {
-                    "type": "string",
-                    "example": "filling1.png"
-                },
-                "name": {
-                    "type": "string",
-                    "maxLength": 150,
-                    "minLength": 1
-                },
-                "price": {
-                    "type": "number",
-                    "minimum": 0.01,
-                    "example": 1200
                 }
             }
         },

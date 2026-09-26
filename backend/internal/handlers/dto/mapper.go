@@ -26,7 +26,6 @@ func CreateFillingRequestToDomain(request CreateFillingRequest) domain.Filling {
 		Name:        request.Name,
 		Description: request.Description,
 		Price:       request.Price,
-		ImageName:   request.ImageName,
 	}
 }
 

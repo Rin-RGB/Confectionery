@@ -96,14 +96,15 @@ func (r *Repository) CreateFilling(ctx context.Context, filling domain.Filling) 
 	defer cancel()
 
 	const query = `
-		INSERT INTO fillings (name, description, price_per_kg, image_name)
-		VALUES ($1, NULLIF($2, ''), $3, NULLIF($4, ''))
+		INSERT INTO fillings (id, name, description, price_per_kg, image_name)
+		VALUES ($1, $2, NULLIF($3, ''), $4, NULLIF($5, ''))
 		RETURNING id, name, COALESCE(description, ''), price_per_kg,
 			COALESCE(image_name, ''), is_active
 	`
 	if err := r.txManager.GetExecutor(queryContext).QueryRow(
 		queryContext,
 		query,
+		filling.ID,
 		filling.Name,
 		filling.Description,
 		filling.Price,

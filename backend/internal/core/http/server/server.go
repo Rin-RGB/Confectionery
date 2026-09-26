@@ -19,7 +19,7 @@ type Route struct {
 }
 
 func New(config config.ServerConfig, routers []*Router, middlewares ...core_middleware.Middleware) *http.Server {
-	mux := registerRouters(routers...)
+	mux := registerRouters(config.StaticFilesFolder, routers...)
 
 	return &http.Server{
 		Addr:              config.Addr,
@@ -28,9 +28,9 @@ func New(config config.ServerConfig, routers []*Router, middlewares ...core_midd
 	}
 }
 
-func registerRouters(routers ...*Router) *http.ServeMux {
+func registerRouters(staticFilesFolder string, routers ...*Router) *http.ServeMux {
 	mux := http.NewServeMux()
-	mux.Handle("GET /static/", http.StripPrefix("/static/", corestatic.Handler()))
+	mux.Handle("GET /static/", http.StripPrefix("/static/", corestatic.Handler(staticFilesFolder)))
 	mux.Handle("GET /swagger/", httpSwagger.WrapHandler)
 
 	for _, router := range routers {

@@ -38,6 +38,7 @@ services:
       SERVER_ADDR: ":8080"
       POSTGRES_HOST: postgres
       LOGGER_FOLDER: /var/log/confectionery
+      STATIC_FILES_FOLDER: /var/lib/confectionery/static
     container_name: confectionery_app
     ports:
       - "8080:8080"
@@ -46,7 +47,9 @@ services:
         condition: service_completed_successfully
     volumes:
       - app_logs:/var/log/confectionery
+      - app_static:/var/lib/confectionery/static
 
 volumes:
   postgres_data:
   app_logs:
+  app_static:

@@ -36,25 +36,6 @@ definitions:
     required:
     - fillings
     type: object
-  dto.CreateFillingRequest:
-    properties:
-      description:
-        type: string
-      image_name:
-        example: filling1.png
-        type: string
-      name:
-        maxLength: 150
-        minLength: 1
-        type: string
-      price:
-        example: 1200
-        minimum: 0.01
-        type: number
-    required:
-    - name
-    - price
-    type: object
   dto.CreateOrderRequest:
     properties:
       decoration_wishes:
@@ -281,15 +262,28 @@ paths:
       - fillings
     post:
       consumes:
-      - application/json
+      - multipart/form-data
       description: Доступно только администратору.
       parameters:
-      - description: Новая начинка
-        in: body
-        name: request
+      - description: Название начинки
+        in: formData
+        name: name
         required: true
-        schema:
-          $ref: '#/definitions/dto.CreateFillingRequest'
+        type: string
+      - description: Описание начинки
+        in: formData
+        name: description
+        type: string
+      - description: Цена за килограмм
+        in: formData
+        name: price
+        required: true
+        type: number
+      - description: Изображение начинки в формате PNG (до 8 МБ)
+        in: formData
+        name: image
+        required: true
+        type: file
       produces:
       - application/json
       responses:

@@ -1,14 +1,25 @@
 package fillings
 
 import (
+	"bytes"
+	"fmt"
+	"image/png"
+	"io"
 	"net/http"
+	"strconv"
 
 	"SPOproject/internal/core/domain"
+	coreerrors "SPOproject/internal/core/errors"
 	"SPOproject/internal/core/http/middleware"
 	core_request "SPOproject/internal/core/http/request"
 	core_response "SPOproject/internal/core/http/response"
 	"SPOproject/internal/core/http/server"
 	"SPOproject/internal/handlers/dto"
+)
+
+const (
+	maxFillingImageSize  = 8 << 20
+	maxMultipartBodySize = 10 << 20
 )
 
 type Handler struct {
@@ -73,10 +84,13 @@ func (h *Handler) GetFilling(writer *core_response.Writer, request *http.Request
 // @Summary Создание начинки
 // @Description Доступно только администратору.
 // @Tags fillings
-// @Accept json
+// @Accept multipart/form-data
 // @Produce json
 // @Security BearerAuth
-// @Param request body dto.CreateFillingRequest true "Новая начинка"
+// @Param name formData string true "Название начинки"
+// @Param description formData string false "Описание начинки"
+// @Param price formData number true "Цена за килограмм"
+// @Param image formData file true "Изображение начинки в формате PNG (до 8 МБ)"
 // @Success 201 {object} dto.FillingResponse
 // @Failure 400 {object} core_response.ErrorResponse
 // @Failure 401 {object} core_response.ErrorResponse
@@ -84,19 +98,92 @@ func (h *Handler) GetFilling(writer *core_response.Writer, request *http.Request
 // @Failure 500 {object} core_response.ErrorResponse
 // @Router /api/v1/fillings [post]
 func (h *Handler) CreateFilling(writer *core_response.Writer, request *http.Request) {
-	var body dto.CreateFillingRequest
-	if err := core_request.DecodeAndValidate(request, &body, h.validator); err != nil {
+	request.Body = http.MaxBytesReader(writer, request.Body, maxMultipartBodySize)
+	body, err := h.parseCreateFillingRequest(request)
+	if err != nil {
 		writer.ErrorResponse(err)
 		return
 	}
 
-	filling, err := h.service.CreateFilling(request.Context(), dto.CreateFillingRequestToDomain(body))
+	filling, err := h.service.CreateFilling(
+		request.Context(),
+		dto.CreateFillingRequestToDomain(body),
+		body.Image,
+	)
 	if err != nil {
 		writer.ErrorResponse(err)
 		return
 	}
 
 	writer.WriteJson(http.StatusCreated, dto.FillingResponseFromDomain(filling))
+}
+
+func (h *Handler) parseCreateFillingRequest(request *http.Request) (dto.CreateFillingRequest, error) {
+	if err := request.ParseMultipartForm(maxFillingImageSize); err != nil {
+		return dto.CreateFillingRequest{}, fmt.Errorf(
+			"parse multipart form: %v: %w",
+			err,
+			coreerrors.ErrInvalidRequest,
+		)
+	}
+	defer request.MultipartForm.RemoveAll()
+
+	price, err := strconv.ParseFloat(request.FormValue("price"), 64)
+	if err != nil {
+		return dto.CreateFillingRequest{}, fmt.Errorf(
+			"parse filling price: %v: %w",
+			err,
+			coreerrors.ErrInvalidRequest,
+		)
+	}
+
+	imageFile, _, err := request.FormFile("image")
+	if err != nil {
+		return dto.CreateFillingRequest{}, fmt.Errorf(
+			"get filling image: %v: %w",
+			err,
+			coreerrors.ErrInvalidRequest,
+		)
+	}
+	defer imageFile.Close()
+
+	image, err := io.ReadAll(io.LimitReader(imageFile, maxFillingImageSize+1))
+	if err != nil {
+		return dto.CreateFillingRequest{}, fmt.Errorf(
+			"read filling image: %v: %w",
+			err,
+			coreerrors.ErrInvalidRequest,
+		)
+	}
+	if len(image) == 0 || len(image) > maxFillingImageSize {
+		return dto.CreateFillingRequest{}, fmt.Errorf(
+			"filling image must be between 1 byte and 8 MiB: %w",
+			coreerrors.ErrInvalidRequest,
+		)
+	}
+	if _, err = png.DecodeConfig(bytes.NewReader(image)); err != nil {
+		return dto.CreateFillingRequest{}, fmt.Errorf(
+			"filling image is not a valid PNG: %v: %w",
+			err,
+			coreerrors.ErrInvalidRequest,
+		)
+	}
+
+	body := dto.CreateFillingRequest{
+		Name:        request.FormValue("name"),
+		Description: request.FormValue("description"),
+		Price:       price,
+		Image:       image,
+	}
+	if err = h.validator.Struct(body); err != nil {
+		return dto.CreateFillingRequest{}, fmt.Errorf(
+			"validate filling request: %v: %w",
+			err,
+			coreerrors.ErrInvalidRequest,
+		)
+	}
+
+	return body, nil
 }
 
 // UpdateFilling частично обновляет начинку.

@@ -32,10 +32,10 @@ type FillingResponse struct {
 }
 
 type CreateFillingRequest struct {
-	Name        string  `json:"name" validate:"required,max=150" minLength:"1" maxLength:"150"`
-	Description string  `json:"description"`
-	Price       float64 `json:"price" validate:"required,gt=0" minimum:"0.01" example:"1200"`
-	ImageName   string  `json:"image_name" example:"filling1.png"`
+	Name        string  `form:"name" validate:"required,max=150" minLength:"1" maxLength:"150"`
+	Description string  `form:"description"`
+	Price       float64 `form:"price" validate:"required,gt=0" minimum:"0.01" example:"1200"`
+	Image       []byte  `form:"image" validate:"required" swaggerignore:"true"`
 }
 
 type UpdateFillingRequest struct {

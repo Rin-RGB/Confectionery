@@ -2,7 +2,10 @@ package fillings
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"unicode/utf8"
 
@@ -13,11 +16,17 @@ import (
 )
 
 type Service struct {
-	fillingsRepo fillingRepository
+	fillingsRepo    fillingRepository
+	txManager       txManager
+	imagesDirectory string
 }
 
-func NewService(fillingsRepo fillingRepository) *Service {
-	return &Service{fillingsRepo: fillingsRepo}
+func NewService(fillingsRepo fillingRepository, txManager txManager, imagesDirectory string) *Service {
+	return &Service{
+		fillingsRepo:    fillingsRepo,
+		txManager:       txManager,
+		imagesDirectory: imagesDirectory,
+	}
 }
 
 func (s *Service) GetFillings(ctx context.Context) ([]domain.Filling, error) {
@@ -45,20 +54,68 @@ func (s *Service) GetFillingByID(ctx context.Context, fillingID string) (domain.
 	return filling, nil
 }
 
-func (s *Service) CreateFilling(ctx context.Context, filling domain.Filling) (domain.Filling, error) {
+func (s *Service) CreateFilling(
+	ctx context.Context,
+	filling domain.Filling,
+	image []byte,
+) (domain.Filling, error) {
 	filling.Name = strings.TrimSpace(filling.Name)
 	filling.Description = strings.TrimSpace(filling.Description)
-	filling.ImageName = strings.TrimSpace(filling.ImageName)
-	if filling.Name == "" || utf8.RuneCountInString(filling.Name) > 150 || filling.Price <= 0 {
+	if filling.Name == "" ||
+		len(filling.Name) > 150 ||
+		filling.Price <= 0 ||
+		len(image) == 0 {
 		return domain.Filling{}, coreerrors.ErrInvalidRequest
 	}
 
-	createdFilling, err := s.fillingsRepo.CreateFilling(ctx, filling)
+	filling.ID = uuid.NewString()
+	filling.ImageName = filling.ID + ".png"
+	imagePath := filepath.Join(s.imagesDirectory, filling.ImageName)
+	imageCreated := false
+
+	var createdFilling domain.Filling
+	err := s.txManager.WithinTx(ctx, func(txCtx context.Context) error {
+		var err error
+		createdFilling, err = s.fillingsRepo.CreateFilling(txCtx, filling)
+		if err != nil {
+			return fmt.Errorf("create filling in database: %w", err)
+		}
+
+		if err = os.MkdirAll(s.imagesDirectory, 0o755); err != nil {
+			return fmt.Errorf("create fillings image directory: %w", err)
+		}
+
+		imageFile, err := os.OpenFile(imagePath, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
+		if err != nil {
+			return fmt.Errorf("create filling image: %w", err)
+		}
+		imageCreated = true
+
+		if _, err = imageFile.Write(image); err != nil {
+			closeErr := imageFile.Close()
+			return errors.Join(fmt.Errorf("write filling image: %w", err), closeErr)
+		}
+		if err = imageFile.Close(); err != nil {
+			return fmt.Errorf("close filling image: %w", err)
+		}
+
+		return nil
+	})
 	if err != nil {
+		if imageCreated {
+			err = errors.Join(err, removeImage(imagePath))
+		}
 		return domain.Filling{}, fmt.Errorf("create filling: %w", err)
 	}
 
 	return createdFilling, nil
+}
+
+func removeImage(imagePath string) error {
+	if err := os.Remove(imagePath); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return fmt.Errorf("remove filling image after rollback: %w", err)
+	}
+	return nil
 }
 
 func (s *Service) UpdateFilling(ctx context.Context, fillingID string, patch domain.FillingPatch) (domain.Filling, error) {

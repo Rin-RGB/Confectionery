@@ -13,3 +13,7 @@ type fillingRepository interface {
 	UpdateFilling(ctx context.Context, fillingID string, patch domain.FillingPatch) (domain.Filling, error)
 	HideFilling(ctx context.Context, fillingID string) error
 }
+
+type txManager interface {
+	WithinTx(ctx context.Context, fn func(txCtx context.Context) error) error
+}

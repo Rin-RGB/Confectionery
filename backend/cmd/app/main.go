@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 
 	_ "SPOproject/docs"
@@ -85,7 +86,11 @@ func main() {
 	ordersRepository := repositoryorders.NewRepository(txManager)
 
 	authService := serviceauth.NewService(usersRepository, passwordHasher, tokenProvider, txManager)
-	fillingsService := servicefillings.NewService(fillingsRepository)
+	fillingsService := servicefillings.NewService(
+		fillingsRepository,
+		txManager,
+		filepath.Join(cfg.ServerCfg.StaticFilesFolder, "fillings"),
+	)
 	ordersService := serviceorders.NewService(ordersRepository, fillingsRepository, txManager)
 	requestValidator := validator.New()
 
