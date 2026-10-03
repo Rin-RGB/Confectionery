@@ -49,7 +49,11 @@ async function parseResponse(response) {
 
 async function rawRequest(path, options = {}, retry = true) {
   const headers = new Headers(options.headers || {});
-  if (options.body !== undefined && !headers.has("Content-Type")) {
+  if (
+    options.body !== undefined &&
+    !(options.body instanceof FormData) &&
+    !headers.has("Content-Type")
+  ) {
     headers.set("Content-Type", "application/json");
   }
 
@@ -138,10 +142,11 @@ export const api = {
     return rawRequest(`/fillings/${encodeURIComponent(id)}`, { method: "GET" });
   },
 
-  createFilling(payload) {
+  createFilling(formData) {
     return rawRequest("/fillings", {
       method: "POST",
-      body: JSON.stringify(payload)
+      // Do not set Content-Type here: fetch adds the multipart boundary.
+      body: formData
     });
   },
 

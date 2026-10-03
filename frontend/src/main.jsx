@@ -2,18 +2,64 @@ import React, { useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
   Check,
+  Eye,
+  EyeOff,
+  ImagePlus,
   LogIn,
   LogOut,
+  Mail,
   MapPin,
+  Pencil,
   Plus,
   ShoppingBag,
-  User,
   X
 } from "lucide-react";
 import "./styles.css";
 import { api, authStorage } from "./api";
 
 const USE_MOCK_FILLINGS = false;
+
+const DRAFT_KEY = "caprice_order_draft_v2";
+const FILLINGS_CACHE_KEY = "caprice_fillings_cache_v1";
+
+function readLocalJson(key, fallback) {
+  try {
+    const value = localStorage.getItem(key);
+    return value ? JSON.parse(value) : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+const SAVED_DRAFT = readLocalJson(DRAFT_KEY, {});
+const SAVED_FILLINGS = readLocalJson(FILLINGS_CACHE_KEY, []);
+
+async function readImageAsDataUrl(file, maxSize = 1280, quality = 0.78) {
+  const dataUrl = await new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => {
+      const scale = Math.min(1, maxSize / Math.max(image.width, image.height));
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.max(1, Math.round(image.width * scale));
+      canvas.height = Math.max(1, Math.round(image.height * scale));
+      const ctx = canvas.getContext("2d");
+      ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
+      resolve({
+        name: file.name,
+        dataUrl: canvas.toDataURL("image/jpeg", quality)
+      });
+    };
+    image.onerror = reject;
+    image.src = dataUrl;
+  });
+}
 
 const MOCK_FILLINGS = [
   {
@@ -137,12 +183,7 @@ function normalizeFillings(payload) {
         item.IsActive ??
         true
     }))
-    .filter(
-      (item) =>
-        item.id &&
-        item.name &&
-        item.is_active !== false
-    );
+    .filter((item) => item.id && item.name);
 }
 
 function normalizeOrders(payload) {
@@ -168,8 +209,17 @@ function normalizeOrders(payload) {
 
 function orderTabForStatus(status) {
   if (status === "cancelled") return "cancelled";
-  if (status === "delivered") return "done";
-  return "active";
+  if (status === "ready") return "ready";
+  return "processing";
+}
+
+function orderStatusLabel(status) {
+  return {
+    accepted: "Принят",
+    processing: "В работе",
+    ready: "Готов к выдаче",
+    cancelled: "Отменён"
+  }[status] || status || "Статус уточняется";
 }
 
 function formatOrderDate(value) {
@@ -185,16 +235,17 @@ function formatOrderDate(value) {
 }
 
 function App() {
-  const [fillings, setFillings] = useState([]);
-  const [selectedFilling, setSelectedFilling] = useState(null);
-  const [weight, setWeight] = useState(1);
+  const [fillings, setFillings] = useState(SAVED_FILLINGS);
+  const [selectedFilling, setSelectedFilling] = useState(SAVED_DRAFT.selectedFilling || null);
+  const [weight, setWeight] = useState(Number(SAVED_DRAFT.weight) || 1);
   const [serverPrice, setServerPrice] = useState(null);
   const [priceLoading, setPriceLoading] = useState(false);
-  const [design, setDesign] = useState("");
-  const [noDesign, setNoDesign] = useState(false);
-  const [address, setAddress] = useState("");
+  const [design, setDesign] = useState(SAVED_DRAFT.design || "");
+  const [noDesign, setNoDesign] = useState(Boolean(SAVED_DRAFT.noDesign));
+  const [address, setAddress] = useState(SAVED_DRAFT.address || "");
+  const [photos, setPhotos] = useState(SAVED_DRAFT.photos || []);
   const [orders, setOrders] = useState([]);
-  const [orderTab, setOrderTab] = useState("active");
+  const [orderTab, setOrderTab] = useState("processing");
   const [ordersOpen, setOrdersOpen] = useState(false);
   const [authOpen, setAuthOpen] = useState(false);
   const [authMode, setAuthMode] = useState("login");
@@ -212,6 +263,36 @@ function App() {
   });
 
   const loggedIn = Boolean(authStorage.getAccess());
+
+  useEffect(() => {
+    if (!notice) return undefined;
+    const timer = window.setTimeout(() => setNotice(""), 5000);
+    return () => window.clearTimeout(timer);
+  }, [notice]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(
+        DRAFT_KEY,
+        JSON.stringify({
+          selectedFilling,
+          weight,
+          design,
+          noDesign,
+          address,
+          photos
+        })
+      );
+    } catch {
+      // The draft is a convenience cache; the order itself is still stored on the server.
+    }
+  }, [selectedFilling, weight, design, noDesign, address, photos]);
+
+  useEffect(() => {
+    if (!selectedFilling || !fillings.length) return;
+    const fresh = fillings.find((item) => item.id === selectedFilling.id);
+    if (fresh && fresh.id !== selectedFilling.id) setSelectedFilling(fresh);
+  }, [fillings]);
 
   const total = useMemo(() => {
     if (!selectedFilling) return 0;
@@ -243,17 +324,24 @@ async function loadFillings() {
   try {
     const response = await api.getFillings();
     const serverFillings = normalizeFillings(response);
+    const cached = readLocalJson(FILLINGS_CACHE_KEY, []);
+    const byId = new Map(cached.map((item) => [String(item.id), item]));
 
-    setFillings(serverFillings);
+    // Keep known hidden fillings in the admin UI even though GET /fillings
+    // intentionally returns only active fillings.
+    serverFillings.forEach((item) => byId.set(String(item.id), item));
+    const merged = Array.from(byId.values());
 
-    //if (!serverFillings.length) {
-      //setNotice("На сервере пока нет начинок.");
-    //}
+    setFillings(merged);
+    try {
+      localStorage.setItem(FILLINGS_CACHE_KEY, JSON.stringify(merged));
+    } catch {}
   } catch (error) {
-    setFillings([]);
-    //setNotice(
-     // `Не удалось загрузить начинки с сервера: ${error.message}`
-    //);
+    const cached = readLocalJson(FILLINGS_CACHE_KEY, []);
+    setFillings(cached);
+    if (!cached.length) {
+      setNotice(`Не удалось загрузить начинки: ${error.message}`);
+    }
   } finally {
     setLoading(false);
   }
@@ -430,29 +518,130 @@ async function handleMockPayment() {
     calculateServerPrice();
   }, [selectedFilling, weight]);
 
+  async function handlePhotosChange(event) {
+    const files = Array.from(event.target.files || []).slice(0, 3);
+    if (event.target.files?.length > 3) {
+      setNotice("Можно прикрепить не более 3 фотографий.");
+    }
+    const valid = files.filter((file) => file.type.startsWith("image/"));
+    if (valid.length !== files.length) {
+      setNotice("Прикреплять можно только изображения.");
+    }
+
+    try {
+      const next = [];
+      for (const file of valid) {
+        next.push(await readImageAsDataUrl(file));
+      }
+      setPhotos(next);
+    } catch {
+      setNotice("Не удалось сохранить одну из фотографий в кэш браузера.");
+    }
+  }
+
+  function removePhoto(index) {
+    setPhotos((current) => current.filter((_, i) => i !== index));
+  }
+
   async function addFilling(event) {
     event.preventDefault();
 
     const form = new FormData(event.currentTarget);
-    const payload = {
-      name: String(form.get("name") || "").trim(),
-      description: String(form.get("description") || "").trim(),
-      price: Number(form.get("price") || 0),
-      image_name: String(form.get("image_name") || "").trim()
-    };
+    const image = form.get("image");
+
+    if (!(image instanceof File) || !image.size) {
+      setNotice("Для новой начинки выберите PNG-картинку.");
+      return;
+    }
 
     try {
-      await api.createFilling(payload);
+      await api.createFilling(form);
       setAddOpen(false);
-      setNotice("Начинка отправлена на сервер.");
+      setNotice("Начинка добавлена.");
       await loadFillings();
     } catch (error) {
       setNotice(error.message);
     }
   }
 
+  async function editFilling(filling) {
+    const name = window.prompt("Название начинки:", filling.name);
+    if (name === null) return;
+
+    const description = window.prompt("Описание:", filling.note || "");
+    if (description === null) return;
+
+    const priceText = window.prompt("Цена за кг:", String(filling.price));
+    if (priceText === null) return;
+
+    const price = Number(priceText);
+    if (!name.trim() || !Number.isFinite(price) || price <= 0) {
+      setNotice("Проверьте название и цену.");
+      return;
+    }
+
+    try {
+      const updated = await api.updateFilling(filling.id, {
+        name: name.trim(),
+        description: description.trim(),
+        price
+      });
+
+      const normalized = normalizeFillings([updated])[0] || {
+        ...filling,
+        name: name.trim(),
+        note: description.trim(),
+        price
+      };
+
+      setFillings((current) => {
+        const next = current.map((item) =>
+          item.id === filling.id ? { ...item, ...normalized, is_active: filling.is_active } : item
+        );
+        try {
+          localStorage.setItem(FILLINGS_CACHE_KEY, JSON.stringify(next));
+        } catch {}
+        return next;
+      });
+      setNotice("Начинка обновлена.");
+    } catch (error) {
+      setNotice(`Не удалось изменить начинку: ${error.message}`);
+    }
+  }
+
+  async function toggleFilling(filling) {
+    try {
+      if (filling.is_active) {
+        await api.deleteFilling(filling.id);
+      } else {
+        await api.updateFilling(filling.id, { is_active: true });
+      }
+
+      setFillings((current) => {
+        const next = current.map((item) =>
+          item.id === filling.id ? { ...item, is_active: !filling.is_active } : item
+        );
+        try {
+          localStorage.setItem(FILLINGS_CACHE_KEY, JSON.stringify(next));
+        } catch {}
+        return next;
+      });
+
+      if (selectedFilling?.id === filling.id && filling.is_active) {
+        setSelectedFilling(null);
+      }
+
+      setNotice(filling.is_active ? "Начинка скрыта." : "Начинка снова доступна.");
+    } catch (error) {
+      setNotice(`Не удалось изменить доступность: ${error.message}`);
+    }
+  }
+
   const filteredOrders = orders.filter((order) => orderTabForStatus(order.status) === orderTab);
   const role = authUser?.role;
+  const visibleFillings = role === "admin"
+    ? fillings
+    : fillings.filter((filling) => filling.is_active !== false);
   const imageFor = (filling) => filling.image_url || "/cake_header.jpg";
 
   async function changeOrderStatus(orderId, status) {
@@ -509,8 +698,8 @@ async function handleMockPayment() {
 
             <div className="tabs" role="tablist">
               {[
-                ["active", "Активные"],
-                ["done", "Выполненные"],
+                ["processing", "Активные"],
+                ["ready", "Готовые"],
                 ["cancelled", "Отменённые"]
               ].map(([key, label]) => (
                 <button
@@ -568,6 +757,10 @@ async function handleMockPayment() {
                         {formatPrice(order.price)}
                       </strong>
 
+                      <span className={`order-status-badge status-${order.status}`}>
+                        {orderStatusLabel(order.status)}
+                      </span>
+
                       {role === "admin" && (
                         <select
                           className="order-status-select"
@@ -603,22 +796,34 @@ async function handleMockPayment() {
               )}
 
 
-            {/* {role === "admin" && (
+            {role === "admin" && (
               <button className="button button-light" onClick={() => setAddOpen(true)}>
                 <Plus size={17} /> Добавить начинку
               </button>
-            )} */}
+            )}
           </div>
 
           <div className="filling-grid">
             {loading ? (
               <div className="empty-state">Загружаем начинки…</div>
             ) : (
-              fillings.map((filling) => (
-                <button
-                  className={selectedFilling?.id === filling.id ? "filling-card selected" : "filling-card"}
+              visibleFillings.map((filling) => (
+                <article
+                  className={[
+                    "filling-card",
+                    selectedFilling?.id === filling.id ? "selected" : "",
+                    filling.is_active === false ? "inactive" : ""
+                  ].filter(Boolean).join(" ")}
                   key={filling.id}
+                  role="button"
+                  tabIndex={0}
                   onClick={() => setSelectedFilling(filling)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      setSelectedFilling(filling);
+                    }
+                  }}
                 >
                   <div className="filling-image">
                     <img
@@ -634,8 +839,19 @@ async function handleMockPayment() {
                     <strong>{filling.name}</strong>
                     <small>{filling.note}</small>
                     <b>{formatPrice(filling.price)} / кг</b>
+                    {role === "admin" && (
+                      <div className="admin-filling-actions" onClick={(event) => event.stopPropagation()}>
+                        <button type="button" className="admin-mini-button" onClick={() => editFilling(filling)}>
+                          <Pencil size={14} /> Редактировать
+                        </button>
+                        <button type="button" className="admin-mini-button" onClick={() => toggleFilling(filling)}>
+                          {filling.is_active ? <EyeOff size={14} /> : <Eye size={14} />}
+                          {filling.is_active ? "Скрыть" : "Вернуть"}
+                        </button>
+                      </div>
+                    )}
                   </div>
-                </button>
+                </article>
               ))
             )}
           </div>
@@ -652,6 +868,16 @@ async function handleMockPayment() {
                 <strong>{selectedFilling?.name || "Ещё не выбрана"}</strong>
               </div>
             </div>
+
+            {!address.trim() && (
+              <div className="order-alert">
+                <MapPin size={20} />
+                <div>
+                  <strong>Укажите адрес доставки</strong>
+                  <span>Он понадобится для оформления заказа.</span>
+                </div>
+              </div>
+            )}
 
             <div className="order-form">
               <div className="form-block">
@@ -687,6 +913,37 @@ async function handleMockPayment() {
                   />
                   <span>Без дизайна</span>
                 </label>
+              </div>
+              
+              <div className="form-block">
+                <label htmlFor="references"><ImagePlus size={17} /> Референсы</label>
+                <label htmlFor="references" className="reference-upload">
+                  <span className="reference-upload__icon">＋</span>
+                  <span className="reference-upload__title">
+                    Добавить референсы
+                  </span>
+                </label>
+
+                <input
+                  id="references"
+                  className="reference-input"
+                  type="file"
+                  accept="image/*"
+                  multiple
+                />
+                <small className="field-hint">Можно прикрепить от 0 до 3 фото.</small>
+                {photos.length > 0 && (
+                  <div className="reference-grid">
+                    {photos.map((photo, index) => (
+                      <div className="reference-item" key={`${photo.name}-${index}`}>
+                        <img src={photo.dataUrl} alt={photo.name} />
+                        <button type="button" onClick={() => removePhoto(index)} aria-label="Удалить фото">
+                          <X size={14} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
 
               <div className="form-block">
@@ -771,6 +1028,10 @@ async function handleMockPayment() {
           </div>
 
           <div className="footer-column footer-wide">
+            <div className="footer-cancel-box">
+              <h4><Mail size={16} /> Хотите отменить заказ?</h4>
+              <p>Напишите нам на <a href="mailto:info@kapriz.ru">info@kapriz.ru</a>, указав номер заказа.</p>
+            </div>
             <h4>Информация</h4>
 
             <p className="footer-links">
@@ -813,7 +1074,7 @@ async function handleMockPayment() {
       </footer>
 
       {notice && (
-        <div className="toast">
+        <div className="toast toast-visible">
           <Check size={18} />
           <span>{notice}</span>
           <button onClick={() => setNotice("")}><X size={17} /></button>
@@ -914,8 +1175,8 @@ async function handleMockPayment() {
             <label className="modal-label" htmlFor="filling-price">Цена за кг</label>
             <input className="modal-input" id="filling-price" name="price" type="number" min="0" placeholder="1400" required />
 
-            <label className="modal-label" htmlFor="filling-image">Имя файла картинки</label>
-            <input className="modal-input"id="filling-image" name="image_name" placeholder="filling1.jpg"/>
+            <label className="modal-label" htmlFor="filling-image">Изображение (PNG)</label>
+            <input className="modal-file" id="filling-image" name="image" type="file" accept="image/png" required />
             <button className="button button-accent modal-submit">Добавить на сервер</button>
           </form>
         </Modal>
