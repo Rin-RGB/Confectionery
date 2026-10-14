@@ -1,14 +1,25 @@
 package orders
 
 import (
+	"encoding/json"
+	"fmt"
+	"io"
+	"mime/multipart"
 	"net/http"
 
 	"SPOproject/internal/core/domain"
+	coreerrors "SPOproject/internal/core/errors"
 	"SPOproject/internal/core/http/middleware"
 	core_request "SPOproject/internal/core/http/request"
 	"SPOproject/internal/core/http/response"
 	"SPOproject/internal/core/http/server"
 	"SPOproject/internal/handlers/dto"
+)
+
+const (
+	maxReferencePhotoSize = 8 << 20
+	maxReferencePhotos    = 3
+	maxOrderBodySize      = maxReferencePhotoSize*maxReferencePhotos + 1<<20
 )
 
 type Handler struct {
@@ -30,6 +41,7 @@ func (h *Handler) Routes() []core_server.Route {
 		{Method: http.MethodGet, Path: "/orders/my", Handler: h.GetMyOrders, Middlewares: userOnly},
 		{Method: http.MethodGet, Path: "/orders/{orderId}", Handler: h.GetOrder, Middlewares: []core_middleware.Middleware{core_middleware.Auth(h.provider, domain.RoleUser, domain.RoleAdmin)}},
 		{Method: http.MethodGet, Path: "/orders", Handler: h.GetOrders, Middlewares: adminOnly},
+		{Method: http.MethodGet, Path: "/orders/{orderId}/photos/{fileName}", Handler: h.GetOrderPhoto, Middlewares: adminOnly},
 		{Method: http.MethodPatch, Path: "/orders/{orderId}/status", Handler: h.UpdateOrderStatus, Middlewares: adminOnly},
 	}
 }
@@ -65,11 +77,14 @@ func (h *Handler) CalculatePrice(writer *core_response.Writer, request *http.Req
 // @Summary Создание заказа
 // @Description Цена рассчитывается на сервере. При ретраях клиент повторно использует тот же Idempotency-Key.
 // @Tags orders
-// @Accept json
+// @Accept multipart/form-data
 // @Produce json
 // @Security BearerAuth
 // @Param Idempotency-Key header string true "UUID идемпотентности, созданный клиентом" Format(uuid)
-// @Param request body dto.CreateOrderRequest true "Данные заказа"
+// @Param fillings formData string true "JSON-массив начинок и их веса"
+// @Param decoration_wishes formData string false "Пожелания по оформлению"
+// @Param delivery_address formData string true "Адрес доставки"
+// @Param reference_photos formData file false "До трёх фотографий-референсов"
 // @Success 201 {object} dto.OrderResponse
 // @Failure 400 {object} core_response.ErrorResponse
 // @Failure 401 {object} core_response.ErrorResponse
@@ -83,8 +98,9 @@ func (h *Handler) CreateOrder(writer *core_response.Writer, request *http.Reques
 		return
 	}
 
-	var body dto.CreateOrderRequest
-	if err = core_request.DecodeAndValidate(request, &body, h.validator); err != nil {
+	request.Body = http.MaxBytesReader(writer, request.Body, maxOrderBodySize)
+	body, err := h.parseCreateOrderRequest(request)
+	if err != nil {
 		writer.ErrorResponse(err)
 		return
 	}
@@ -102,6 +118,76 @@ func (h *Handler) CreateOrder(writer *core_response.Writer, request *http.Reques
 	}
 
 	writer.WriteJson(http.StatusCreated, dto.OrderResponseFromDomain(order))
+}
+
+func (h *Handler) parseCreateOrderRequest(request *http.Request) (dto.CreateOrderRequest, error) {
+	if err := request.ParseMultipartForm(maxReferencePhotoSize); err != nil {
+		return dto.CreateOrderRequest{}, fmt.Errorf("parse order multipart form: %v: %w", err, coreerrors.ErrInvalidRequest)
+	}
+	defer request.MultipartForm.RemoveAll()
+
+	var fillings []dto.PriceFillingRequest
+	if err := json.Unmarshal([]byte(request.FormValue("fillings")), &fillings); err != nil {
+		return dto.CreateOrderRequest{}, fmt.Errorf("parse order fillings: %v: %w", err, coreerrors.ErrInvalidRequest)
+	}
+
+	photoHeaders := request.MultipartForm.File["reference_photos"]
+	if len(photoHeaders) > maxReferencePhotos {
+		return dto.CreateOrderRequest{}, fmt.Errorf("too many reference photos: %w", coreerrors.ErrInvalidRequest)
+	}
+
+	photos := make([]domain.OrderPhotoUpload, 0, len(photoHeaders))
+	for _, photoHeader := range photoHeaders {
+		photo, err := readReferencePhoto(photoHeader)
+		if err != nil {
+			return dto.CreateOrderRequest{}, err
+		}
+		photos = append(photos, photo)
+	}
+
+	body := dto.CreateOrderRequest{
+		Fillings:         fillings,
+		DecorationWishes: request.FormValue("decoration_wishes"),
+		DeliveryAddress:  request.FormValue("delivery_address"),
+		ReferencePhotos:  photos,
+	}
+	if err := h.validator.Struct(body); err != nil {
+		return dto.CreateOrderRequest{}, fmt.Errorf("validate order request: %v: %w", err, coreerrors.ErrInvalidRequest)
+	}
+
+	return body, nil
+}
+
+func readReferencePhoto(header *multipart.FileHeader) (domain.OrderPhotoUpload, error) {
+	file, err := header.Open()
+	if err != nil {
+		return domain.OrderPhotoUpload{}, fmt.Errorf("open reference photo: %v: %w", err, coreerrors.ErrInvalidRequest)
+	}
+	defer file.Close()
+
+	data, err := io.ReadAll(io.LimitReader(file, maxReferencePhotoSize+1))
+	if err != nil {
+		return domain.OrderPhotoUpload{}, fmt.Errorf("read reference photo: %v: %w", err, coreerrors.ErrInvalidRequest)
+	}
+	if len(data) == 0 || len(data) > maxReferencePhotoSize {
+		return domain.OrderPhotoUpload{}, fmt.Errorf("invalid reference photo size: %w", coreerrors.ErrInvalidRequest)
+	}
+
+	var extension string
+	switch http.DetectContentType(data) {
+	case "image/jpeg":
+		extension = ".jpg"
+	case "image/png":
+		extension = ".png"
+	case "image/gif":
+		extension = ".gif"
+	case "image/webp":
+		extension = ".webp"
+	default:
+		return domain.OrderPhotoUpload{}, fmt.Errorf("reference photo has unsupported format: %w", coreerrors.ErrInvalidRequest)
+	}
+
+	return domain.OrderPhotoUpload{Data: data, Extension: extension}, nil
 }
 
 // GetMyOrders возвращает заказы текущего пользователя.
@@ -164,6 +250,35 @@ func (h *Handler) GetOrder(writer *core_response.Writer, request *http.Request) 
 	writer.WriteJson(http.StatusOK, dto.OrderResponseFromDomain(order))
 }
 
+// GetOrderPhoto возвращает фотографию-референс заказа.
+// @Summary Получение фотографии заказа
+// @Description Доступно только администратору.
+// @Tags orders
+// @Produce image/jpeg,image/png,image/gif,image/webp
+// @Security BearerAuth
+// @Param orderId path string true "UUID заказа" Format(uuid)
+// @Param fileName path string true "Имя фотографии из reference_photos"
+// @Success 200 {file} file
+// @Failure 400 {object} core_response.ErrorResponse
+// @Failure 401 {object} core_response.ErrorResponse
+// @Failure 403 {object} core_response.ErrorResponse
+// @Failure 404 {object} core_response.ErrorResponse
+// @Failure 500 {object} core_response.ErrorResponse
+// @Router /api/v1/orders/{orderId}/photos/{fileName} [get]
+func (h *Handler) GetOrderPhoto(writer *core_response.Writer, request *http.Request) {
+	photoPath, err := h.service.GetOrderPhoto(
+		request.Context(),
+		request.PathValue("orderId"),
+		request.PathValue("fileName"),
+	)
+	if err != nil {
+		writer.ErrorResponse(err)
+		return
+	}
+
+	http.ServeFile(writer, request, photoPath)
+}
+
 // GetOrders возвращает заказы с необязательной фильтрацией по статусу.
 // @Summary Получение всех заказов
 // @Description Доступно только администратору. Без type возвращаются все заказы.
@@ -221,6 +336,7 @@ func (h *Handler) UpdateOrderStatus(writer *core_response.Writer, request *http.
 		request.Context(),
 		request.PathValue("orderId"),
 		body.Status,
+		body.DeclineReason,
 	); err != nil {
 		writer.ErrorResponse(err)
 		return

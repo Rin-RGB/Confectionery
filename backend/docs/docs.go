@@ -476,7 +476,7 @@ const docTemplate = `{
                 ],
                 "description": "Цена рассчитывается на сервере. При ретраях клиент повторно использует тот же Idempotency-Key.",
                 "consumes": [
-                    "application/json"
+                    "multipart/form-data"
                 ],
                 "produces": [
                     "application/json"
@@ -495,13 +495,30 @@ const docTemplate = `{
                         "required": true
                     },
                     {
-                        "description": "Данные заказа",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/dto.CreateOrderRequest"
-                        }
+                        "type": "string",
+                        "description": "JSON-массив начинок и их веса",
+                        "name": "fillings",
+                        "in": "formData",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Пожелания по оформлению",
+                        "name": "decoration_wishes",
+                        "in": "formData"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Адрес доставки",
+                        "name": "delivery_address",
+                        "in": "formData",
+                        "required": true
+                    },
+                    {
+                        "type": "file",
+                        "description": "До трёх фотографий-референсов",
+                        "name": "reference_photos",
+                        "in": "formData"
                     }
                 ],
                 "responses": {
@@ -659,6 +676,81 @@ const docTemplate = `{
                         "description": "OK",
                         "schema": {
                             "$ref": "#/definitions/dto.OrderResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/core_response.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/core_response.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/core_response.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/core_response.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/core_response.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/orders/{orderId}/photos/{fileName}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Доступно только администратору.",
+                "produces": [
+                    "image/jpeg",
+                    "image/png",
+                    "image/gif",
+                    "image/webp"
+                ],
+                "tags": [
+                    "orders"
+                ],
+                "summary": "Получение фотографии заказа",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "UUID заказа",
+                        "name": "orderId",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Имя фотографии из reference_photos",
+                        "name": "fileName",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "file"
                         }
                     },
                     "400": {
@@ -956,30 +1048,6 @@ const docTemplate = `{
                 }
             }
         },
-        "dto.CreateOrderRequest": {
-            "type": "object",
-            "required": [
-                "delivery_address",
-                "fillings"
-            ],
-            "properties": {
-                "decoration_wishes": {
-                    "type": "string"
-                },
-                "delivery_address": {
-                    "type": "string",
-                    "minLength": 1,
-                    "example": "Москва, ул. Примерная, 10"
-                },
-                "fillings": {
-                    "type": "array",
-                    "minItems": 1,
-                    "items": {
-                        "$ref": "#/definitions/dto.PriceFillingRequest"
-                    }
-                }
-            }
-        },
         "dto.FillingResponse": {
             "type": "object",
             "properties": {
@@ -1069,6 +1137,12 @@ const docTemplate = `{
                 "id": {
                     "type": "string",
                     "format": "uuid"
+                },
+                "reference_photos": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
                 },
                 "status": {
                     "enum": [
@@ -1229,6 +1303,9 @@ const docTemplate = `{
                 "status"
             ],
             "properties": {
+                "decline_reason": {
+                    "type": "string"
+                },
                 "status": {
                     "enum": [
                         "accepted",

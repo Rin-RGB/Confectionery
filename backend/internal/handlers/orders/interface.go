@@ -11,6 +11,7 @@ type orderService interface {
 	CreateOrder(ctx context.Context, userID string, draft domain.OrderDraft) (domain.Order, error)
 	GetMyOrders(ctx context.Context, userID string) ([]domain.Order, error)
 	GetOrderByID(ctx context.Context, userID, orderID string) (domain.Order, error)
+	GetOrderPhoto(ctx context.Context, orderID, photoName string) (string, error)
 	GetOrders(ctx context.Context, status *domain.OrderStatus) ([]domain.Order, error)
-	UpdateStatus(ctx context.Context, orderID string, status domain.OrderStatus) error
+	UpdateStatus(ctx context.Context, orderID string, status domain.OrderStatus, declineReason *string) error
 }

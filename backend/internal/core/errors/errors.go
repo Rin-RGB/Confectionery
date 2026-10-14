@@ -14,4 +14,5 @@ var (
 	ErrExpiredToken       = errors.New("token is expired")
 	ErrFillingNotFound    = errors.New("filling not found")
 	ErrOrderNotFound      = errors.New("order not found")
+	ErrOrderPhotoNotFound = errors.New("order photo not found")
 )

@@ -70,6 +70,7 @@ func CreateOrderRequestToDomain(request CreateOrderRequest) domain.OrderDraft {
 		Fillings:         fillings,
 		DecorationWishes: request.DecorationWishes,
 		DeliveryAddress:  request.DeliveryAddress,
+		ReferencePhotos:  request.ReferencePhotos,
 	}
 }
 
@@ -105,6 +106,7 @@ func OrderResponseFromDomain(order domain.Order) OrderResponse {
 		DeliveryAddress:  order.DeliveryAddress,
 		TotalPrice:       order.TotalPrice,
 		Status:           order.Status,
+		ReferencePhotos:  order.ReferencePhotos,
 		CreatedAt:        order.CreatedAt,
 		UpdatedAt:        order.UpdatedAt,
 	}

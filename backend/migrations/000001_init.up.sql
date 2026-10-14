@@ -78,6 +78,8 @@ CREATE TABLE orders (
                                     )
                                 ),
 
+                        decline_reason VARCHAR(255) DEFAULT NULL,
+
                         created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
                         updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
 

@@ -9,11 +9,13 @@ import (
 type orderRepository interface {
 	CreateOrder(ctx context.Context, order domain.Order) (domain.Order, error)
 	CreateOrderFillings(ctx context.Context, orderID string, fillings []domain.OrderFilling) error
+	CreateOrderPhotos(ctx context.Context, orderID string, photoNames []string) error
+	GetOrderPhotoNames(ctx context.Context, orderID string) ([]string, error)
 	GetOrderByID(ctx context.Context, orderID string) (domain.Order, error)
 	GetOrderFillings(ctx context.Context, orderID string) ([]domain.OrderFilling, error)
 	GetOrdersByUser(ctx context.Context, userID string) ([]domain.Order, error)
 	GetOrders(ctx context.Context, status *domain.OrderStatus) ([]domain.Order, error)
-	UpdateStatus(ctx context.Context, orderID string, status domain.OrderStatus) error
+	UpdateStatus(ctx context.Context, orderID string, status domain.OrderStatus, declineReason *string) error
 }
 
 type txManager interface {

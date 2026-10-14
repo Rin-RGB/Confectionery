@@ -60,13 +60,15 @@ type PriceResponse struct {
 }
 
 type CreateOrderRequest struct {
-	Fillings         []PriceFillingRequest `json:"fillings" validate:"required,min=1,dive" minItems:"1"`
-	DecorationWishes string                `json:"decoration_wishes"`
-	DeliveryAddress  string                `json:"delivery_address" validate:"required" minLength:"1" example:"Москва, ул. Примерная, 10"`
+	Fillings         []PriceFillingRequest     `form:"fillings" validate:"required,min=1,dive" minItems:"1"`
+	DecorationWishes string                    `form:"decoration_wishes"`
+	DeliveryAddress  string                    `form:"delivery_address" validate:"required" minLength:"1" example:"Москва, ул. Примерная, 10"`
+	ReferencePhotos  []domain.OrderPhotoUpload `form:"reference_photos" validate:"max=3" swaggerignore:"true"`
 }
 
 type UpdateOrderStatusRequest struct {
-	Status domain.OrderStatus `json:"status" validate:"required,oneof=accepted processing ready cancelled" enums:"accepted,processing,ready,cancelled"`
+	Status        domain.OrderStatus `json:"status" validate:"required,oneof=accepted processing ready cancelled" enums:"accepted,processing,ready,cancelled"`
+	DeclineReason *string            `json:"decline_reason,omitempty"`
 }
 
 type OrderSummaryResponse struct {
@@ -91,6 +93,7 @@ type OrderResponse struct {
 	DeliveryAddress  string                 `json:"delivery_address"`
 	TotalPrice       float64                `json:"total_price" minimum:"0"`
 	Status           domain.OrderStatus     `json:"status" enums:"accepted,processing,ready,cancelled"`
+	ReferencePhotos  []string               `json:"reference_photos"`
 	CreatedAt        time.Time              `json:"created_at"`
 	UpdatedAt        time.Time              `json:"updated_at"`
 }

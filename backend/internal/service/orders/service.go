@@ -2,8 +2,12 @@ package orders
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math"
+	"os"
+	"path/filepath"
+	"strconv"
 	"strings"
 
 	"SPOproject/internal/core/domain"
@@ -11,6 +15,11 @@ import (
 	core_middleware "SPOproject/internal/core/http/middleware"
 
 	"github.com/google/uuid"
+)
+
+const (
+	tempPhotoDirectory = "temp_photo"
+	maxReferencePhotos = 3
 )
 
 type Service struct {
@@ -54,6 +63,9 @@ func (s *Service) CreateOrder(ctx context.Context, userID string, draft domain.O
 	if draft.DeliveryAddress == "" {
 		return domain.Order{}, coreerrors.ErrInvalidRequest
 	}
+	if len(draft.ReferencePhotos) > maxReferencePhotos {
+		return domain.Order{}, coreerrors.ErrInvalidRequest
+	}
 
 	order, err := s.prepareOrder(ctx, draft.Fillings)
 	if err != nil {
@@ -67,6 +79,7 @@ func (s *Service) CreateOrder(ctx context.Context, userID string, draft domain.O
 	order.Status = domain.OrderStatusAccepted
 
 	var createdOrder domain.Order
+	var createdPhotoPaths []string
 	err = s.txManager.WithinTx(ctx, func(txCtx context.Context) error {
 		createdOrder, err = s.orders.CreateOrder(txCtx, order)
 		if err != nil {
@@ -79,6 +92,10 @@ func (s *Service) CreateOrder(ctx context.Context, userID string, draft domain.O
 		}
 		if len(savedFillings) > 0 {
 			createdOrder.Fillings = savedFillings
+			createdOrder.ReferencePhotos, err = s.orders.GetOrderPhotoNames(txCtx, createdOrder.ID)
+			if err != nil {
+				return fmt.Errorf("get saved order photo names: %w", err)
+			}
 			return nil
 		}
 
@@ -87,13 +104,60 @@ func (s *Service) CreateOrder(ctx context.Context, userID string, draft domain.O
 		}
 		createdOrder.Fillings = order.Fillings
 
+		photoNames, photoPaths, err := saveReferencePhotos(createdOrder.ID, draft.ReferencePhotos)
+		createdPhotoPaths = photoPaths
+		if err != nil {
+			return fmt.Errorf("save reference photos: %w", err)
+		}
+		if err = s.orders.CreateOrderPhotos(txCtx, createdOrder.ID, photoNames); err != nil {
+			return fmt.Errorf("create order photos: %w", err)
+		}
+		createdOrder.ReferencePhotos = photoNames
+
 		return nil
 	})
 	if err != nil {
+		for _, photoPath := range createdPhotoPaths {
+			if removeErr := os.Remove(photoPath); removeErr != nil && !errors.Is(removeErr, os.ErrNotExist) {
+				err = errors.Join(err, fmt.Errorf("remove reference photo after rollback: %w", removeErr))
+			}
+		}
 		return domain.Order{}, err
 	}
 
 	return createdOrder, nil
+}
+
+func saveReferencePhotos(orderID string, photos []domain.OrderPhotoUpload) ([]string, []string, error) {
+	if len(photos) == 0 {
+		return make([]string, 0), nil, nil
+	}
+	if err := os.MkdirAll(tempPhotoDirectory, 0o755); err != nil {
+		return nil, nil, fmt.Errorf("create temp photo directory: %w", err)
+	}
+
+	photoNames := make([]string, 0, len(photos))
+	photoPaths := make([]string, 0, len(photos))
+	for index, photo := range photos {
+		photoName := orderID + "_" + strconv.Itoa(index+1) + photo.Extension
+		photoPath := filepath.Join(tempPhotoDirectory, photoName)
+		photoFile, err := os.OpenFile(photoPath, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
+		if err != nil {
+			return photoNames, photoPaths, fmt.Errorf("create reference photo: %w", err)
+		}
+		photoNames = append(photoNames, photoName)
+		photoPaths = append(photoPaths, photoPath)
+
+		if _, err = photoFile.Write(photo.Data); err != nil {
+			closeErr := photoFile.Close()
+			return photoNames, photoPaths, errors.Join(fmt.Errorf("write reference photo: %w", err), closeErr)
+		}
+		if err = photoFile.Close(); err != nil {
+			return photoNames, photoPaths, fmt.Errorf("close reference photo: %w", err)
+		}
+	}
+
+	return photoNames, photoPaths, nil
 }
 
 func (s *Service) prepareOrder(
@@ -196,8 +260,55 @@ func (s *Service) GetOrderByID(ctx context.Context, userID, orderID string) (dom
 		return domain.Order{}, fmt.Errorf("get order fillings: %w", err)
 	}
 	order.Fillings = fillings
+	order.ReferencePhotos, err = s.orders.GetOrderPhotoNames(ctx, orderID)
+	if err != nil {
+		return domain.Order{}, fmt.Errorf("get order photo names: %w", err)
+	}
 
 	return order, nil
+}
+
+func (s *Service) GetOrderPhoto(ctx context.Context, orderID, photoName string) (string, error) {
+	if _, err := uuid.Parse(orderID); err != nil {
+		return "", fmt.Errorf("invalid order id: %w", coreerrors.ErrInvalidRequest)
+	}
+	photoName = strings.TrimSpace(photoName)
+	if photoName == "" || filepath.Base(photoName) != photoName {
+		return "", fmt.Errorf("invalid order photo name: %w", coreerrors.ErrInvalidRequest)
+	}
+
+	if _, err := s.orders.GetOrderByID(ctx, orderID); err != nil {
+		return "", fmt.Errorf("get order: %w", err)
+	}
+	photoNames, err := s.orders.GetOrderPhotoNames(ctx, orderID)
+	if err != nil {
+		return "", fmt.Errorf("get order photo names: %w", err)
+	}
+
+	belongsToOrder := false
+	for _, savedPhotoName := range photoNames {
+		if savedPhotoName == photoName {
+			belongsToOrder = true
+			break
+		}
+	}
+	if !belongsToOrder {
+		return "", coreerrors.ErrOrderPhotoNotFound
+	}
+
+	photoPath := filepath.Join(tempPhotoDirectory, photoName)
+	fileInfo, err := os.Stat(photoPath)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return "", coreerrors.ErrOrderPhotoNotFound
+		}
+		return "", fmt.Errorf("stat order photo: %w", err)
+	}
+	if !fileInfo.Mode().IsRegular() {
+		return "", coreerrors.ErrOrderPhotoNotFound
+	}
+
+	return photoPath, nil
 }
 
 func (s *Service) GetOrders(ctx context.Context, status *domain.OrderStatus) ([]domain.Order, error) {
@@ -213,7 +324,12 @@ func (s *Service) GetOrders(ctx context.Context, status *domain.OrderStatus) ([]
 	return orders, nil
 }
 
-func (s *Service) UpdateStatus(ctx context.Context, orderID string, status domain.OrderStatus) error {
+func (s *Service) UpdateStatus(
+	ctx context.Context,
+	orderID string,
+	status domain.OrderStatus,
+	declineReason *string,
+) error {
 	if _, err := uuid.Parse(orderID); err != nil {
 		return fmt.Errorf("invalid order id: %w", coreerrors.ErrInvalidRequest)
 	}
@@ -221,7 +337,7 @@ func (s *Service) UpdateStatus(ctx context.Context, orderID string, status domai
 		return fmt.Errorf("invalid order status: %w", coreerrors.ErrInvalidRequest)
 	}
 
-	if err := s.orders.UpdateStatus(ctx, orderID, status); err != nil {
+	if err := s.orders.UpdateStatus(ctx, orderID, status, declineReason); err != nil {
 		return fmt.Errorf("update order status: %w", err)
 	}
 

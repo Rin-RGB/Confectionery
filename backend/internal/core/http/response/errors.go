@@ -31,6 +31,7 @@ var errorSlice = []errorValue{
 	{mapError: coreerrors.ErrEmailExists, statusCode: http.StatusConflict, logLevel: "WARN", error: coreerrors.ErrEmailExists.Error()},
 	{mapError: coreerrors.ErrFillingNotFound, statusCode: http.StatusNotFound, logLevel: "WARN", error: coreerrors.ErrFillingNotFound.Error()},
 	{mapError: coreerrors.ErrOrderNotFound, statusCode: http.StatusNotFound, logLevel: "WARN", error: coreerrors.ErrOrderNotFound.Error()},
+	{mapError: coreerrors.ErrOrderPhotoNotFound, statusCode: http.StatusNotFound, logLevel: "WARN", error: coreerrors.ErrOrderPhotoNotFound.Error()},
 	{mapError: coreerrors.ErrNotImplemented, statusCode: http.StatusNotImplemented, logLevel: "WARN", error: coreerrors.ErrNotImplemented.Error()},
 	{mapError: coreerrors.ErrInternal, statusCode: http.StatusInternalServerError, logLevel: "ERROR", error: coreerrors.ErrInternal.Error()},
 }

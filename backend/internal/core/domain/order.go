@@ -16,6 +16,12 @@ type OrderDraft struct {
 	Fillings         []FillingWeight
 	DecorationWishes string
 	DeliveryAddress  string
+	ReferencePhotos  []OrderPhotoUpload
+}
+
+type OrderPhotoUpload struct {
+	Data      []byte
+	Extension string
 }
 
 type PriceCalculation struct {
@@ -41,6 +47,7 @@ type Order struct {
 	DeliveryAddress  string
 	TotalPrice       float64
 	Status           OrderStatus
+	ReferencePhotos  []string
 	CreatedAt        time.Time
 	UpdatedAt        time.Time
 }

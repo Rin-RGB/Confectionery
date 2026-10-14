@@ -122,6 +122,66 @@ func (r *Repository) CreateOrderFillings(
 	return nil
 }
 
+func (r *Repository) CreateOrderPhotos(ctx context.Context, orderID string, photoNames []string) error {
+	if len(photoNames) == 0 {
+		return nil
+	}
+
+	queryContext, cancel := context.WithTimeout(ctx, r.txManager.GetTimeout())
+	defer cancel()
+
+	const query = `
+		INSERT INTO order_photos (order_id, photo_name)
+		SELECT $1::UUID, photo_name
+		FROM unnest($2::TEXT[]) AS photo(photo_name)
+	`
+	commandTag, err := r.txManager.GetExecutor(queryContext).Exec(
+		queryContext,
+		query,
+		orderID,
+		photoNames,
+	)
+	if err != nil {
+		return fmt.Errorf("insert order photos: %w", err)
+	}
+	if commandTag.RowsAffected() != int64(len(photoNames)) {
+		return fmt.Errorf("inserted %d of %d order photos", commandTag.RowsAffected(), len(photoNames))
+	}
+
+	return nil
+}
+
+func (r *Repository) GetOrderPhotoNames(ctx context.Context, orderID string) ([]string, error) {
+	queryContext, cancel := context.WithTimeout(ctx, r.txManager.GetTimeout())
+	defer cancel()
+
+	const query = `
+		SELECT photo_name
+		FROM order_photos
+		WHERE order_id = $1
+		ORDER BY photo_name
+	`
+	rows, err := r.txManager.GetExecutor(queryContext).Query(queryContext, query, orderID)
+	if err != nil {
+		return nil, fmt.Errorf("select order photo names: %w", err)
+	}
+	defer rows.Close()
+
+	photoNames := make([]string, 0)
+	for rows.Next() {
+		var photoName string
+		if err = rows.Scan(&photoName); err != nil {
+			return nil, fmt.Errorf("scan order photo name: %w", err)
+		}
+		photoNames = append(photoNames, photoName)
+	}
+	if err = rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate order photo names: %w", err)
+	}
+
+	return photoNames, nil
+}
+
 func (r *Repository) GetOrderByID(ctx context.Context, orderID string) (domain.Order, error) {
 	queryContext, cancel := context.WithTimeout(ctx, r.txManager.GetTimeout())
 	defer cancel()
@@ -260,17 +320,29 @@ func (r *Repository) GetOrders(ctx context.Context, status *domain.OrderStatus) 
 	return orders, nil
 }
 
-func (r *Repository) UpdateStatus(ctx context.Context, orderID string, status domain.OrderStatus) error {
+func (r *Repository) UpdateStatus(
+	ctx context.Context,
+	orderID string,
+	status domain.OrderStatus,
+	declineReason *string,
+) error {
 	queryContext, cancel := context.WithTimeout(ctx, r.txManager.GetTimeout())
 	defer cancel()
 
 	const query = `
 		UPDATE orders
 		SET status = $2,
+			decline_reason = COALESCE($3, decline_reason),
 			updated_at = now()
 		WHERE id = $1
 	`
-	commandTag, err := r.txManager.GetExecutor(queryContext).Exec(queryContext, query, orderID, status)
+	commandTag, err := r.txManager.GetExecutor(queryContext).Exec(
+		queryContext,
+		query,
+		orderID,
+		status,
+		declineReason,
+	)
 	if err != nil {
 		return fmt.Errorf("update order status: %w", err)
 	}
