@@ -187,6 +187,26 @@ export const api = {
     return rawRequest(`/orders/${encodeURIComponent(id)}`, { method: "GET" });
   },
 
+  async getOrderPhoto(orderId, fileName) {
+    const headers = new Headers();
+    const access = authStorage.getAccess();
+
+    if (access) {
+      headers.set("Authorization", `Bearer ${access}`);
+    }
+
+    const response = await fetch(
+      `${API_BASE}/orders/${encodeURIComponent(orderId)}/photos/${encodeURIComponent(fileName)}`,
+      { headers }
+    );
+
+    if (!response.ok) {
+      throw new Error(`Не удалось загрузить фото (${response.status})`);
+    }
+
+    return response.blob();
+  },
+
   getAllOrders() {
     return rawRequest("/orders", { method: "GET" });
   },

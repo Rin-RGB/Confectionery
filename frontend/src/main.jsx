@@ -202,6 +202,7 @@ function normalizeOrders(payload) {
       price: Number(item.total_price ?? 0),
       status: item.status ?? "accepted",
       decoration: item.decoration_wishes ?? "",
+      referencePhotos: item.reference_photos ?? item.ReferencePhotos ?? [],
       address: item.delivery_address ?? ""
     };
   });
@@ -234,6 +235,45 @@ function formatOrderDate(value) {
   }).format(date);
 }
 
+function OrderPhotoThumbnail({ orderId, fileName, onOpen }) {
+  const [src, setSrc] = useState("");
+  const [error, setError] = useState(false);
+
+  useEffect(() => {
+    let objectUrl = "";
+
+    api.getOrderPhoto(orderId, fileName)
+      .then((blob) => {
+        objectUrl = URL.createObjectURL(blob);
+        setSrc(objectUrl);
+      })
+      .catch(() => setError(true));
+
+    return () => {
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [orderId, fileName]);
+
+  if (error) {
+    return <span className="order-photo-error">Фото недоступно</span>;
+  }
+
+  if (!src) {
+    return <span className="order-photo-loading">Загрузка…</span>;
+  }
+
+  return (
+    <button
+      type="button"
+      className="order-photo-thumb"
+      onClick={() => onOpen(src)}
+      title="Увеличить фото"
+    >
+      <img src={src} alt="Фото-референс заказа" />
+    </button>
+  );
+}
+
 function App() {
   const [fillings, setFillings] = useState(SAVED_FILLINGS);
   const [selectedFillings, setSelectedFillings] = useState(SAVED_DRAFT.selectedFilling ? [SAVED_DRAFT.selectedFilling] : []);
@@ -251,6 +291,7 @@ function App() {
   const [authMode, setAuthMode] = useState("login");
   const [addOpen, setAddOpen] = useState(false);
   const [notice, setNotice] = useState("");
+  const [previewPhoto, setPreviewPhoto] = useState(null);
   const [loading, setLoading] = useState(true);
   const [authLoading, setAuthLoading] = useState(false);
   const [paymentOpen, setPaymentOpen] = useState(false);
@@ -809,6 +850,26 @@ function App() {
                       <strong>{order.decoration || "—"}</strong>
                     </div>
 
+                    {role === "admin" && (
+                      <div className="order-photos-cell">
+                        <span className="order-muted">Референсы</span>
+                        {order.referencePhotos?.length ? (
+                          <div className="order-photo-list">
+                            {order.referencePhotos.map((fileName) => (
+                              <OrderPhotoThumbnail
+                                key={fileName}
+                                orderId={order.id}
+                                fileName={fileName}
+                                onOpen={setPreviewPhoto}
+                              />
+                            ))}
+                          </div>
+                        ) : (
+                          <strong>—</strong>
+                        )}
+                      </div>
+                    )}
+
                     <div>
                       <span className="order-muted">Вес</span>
                       <strong>{order.weight} кг</strong>
@@ -991,22 +1052,13 @@ function App() {
               </div>
 
               <div className="form-block">
-                <label htmlFor="design">Ваши пожелания по дизайну</label>
-                <textarea
-                  id="design"
-                  value={design}
-                  onChange={(e) => setDesign(e.target.value)}
-                  placeholder="Например: белый крем, ягоды сверху, надпись «С днём рождения!»"
-                  disabled={noDesign}
+                <label htmlFor="address"><MapPin size={17} /> Адрес доставки</label>
+                <input
+                  id="address"
+                  value={address}
+                  onChange={(e) => setAddress(e.target.value)}
+                  placeholder="Город, улица, дом, квартира"
                 />
-                <label className="checkbox-row">
-                  <input
-                    type="checkbox"
-                    checked={noDesign}
-                    onChange={(e) => setNoDesign(e.target.checked)}
-                  />
-                  <span>Без дизайна</span>
-                </label>
               </div>
               
               <div className="form-block">
@@ -1042,13 +1094,22 @@ function App() {
               </div>
 
               <div className="form-block">
-                <label htmlFor="address"><MapPin size={17} /> Адрес доставки</label>
-                <input
-                  id="address"
-                  value={address}
-                  onChange={(e) => setAddress(e.target.value)}
-                  placeholder="Город, улица, дом, квартира"
+                <label htmlFor="design">Ваши пожелания по дизайну</label>
+                <textarea
+                  id="design"
+                  value={design}
+                  onChange={(e) => setDesign(e.target.value)}
+                  placeholder="Например: белый крем, ягоды сверху, надпись «С днём рождения!»"
+                  disabled={noDesign}
                 />
+                <label className="checkbox-row">
+                  <input
+                    type="checkbox"
+                    checked={noDesign}
+                    onChange={(e) => setNoDesign(e.target.checked)}
+                  />
+                  <span>Без дизайна</span>
+                </label>
               </div>
 
               <div className="checkout-card">
@@ -1079,6 +1140,32 @@ function App() {
               </div>
             </div>
           </section>
+        )}
+
+        {previewPhoto && (
+          <div
+            className="photo-modal-backdrop"
+            onClick={() => setPreviewPhoto(null)}
+            onKeyDown={(event) => {
+              if (event.key === "Escape") setPreviewPhoto(null);
+            }}
+          >
+            <button
+              type="button"
+              className="photo-modal-close"
+              aria-label="Закрыть фото"
+              onClick={() => setPreviewPhoto(null)}
+            >
+              <X size={24} />
+            </button>
+
+            <img
+              className="photo-modal-image"
+              src={previewPhoto}
+              alt="Увеличенное фото-референс"
+              onClick={(event) => event.stopPropagation()}
+            />
+          </div>
         )}
       </main>
 
