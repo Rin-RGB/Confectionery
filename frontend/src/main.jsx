@@ -192,12 +192,12 @@ function normalizeOrders(payload) {
     : [payload];
 
   return list.map((item) => {
-    const filling = item.fillings?.[0];
+    const fillings = item.fillings ?? [];
 
     return {
       id: item.id,
       date: item.created_at,
-      filling: filling?.name ?? "—",
+      filling: fillings.length ? fillings.map((f) => f.name).filter(Boolean).join(", ") : "—",
       weight: Number(item.weight_grams ?? 0) / 1000,
       price: Number(item.total_price ?? 0),
       status: item.status ?? "accepted",
