@@ -145,7 +145,6 @@ export const api = {
   createFilling(formData) {
     return rawRequest("/fillings", {
       method: "POST",
-      // Do not set Content-Type here: fetch adds the multipart boundary.
       body: formData
     });
   },
@@ -170,13 +169,13 @@ export const api = {
     });
   },
 
-  createOrder(payload) {
+  createOrder(formData) {
     return rawRequest("/orders", {
       method: "POST",
       headers: {
         "Idempotency-Key": crypto.randomUUID()
       },
-      body: JSON.stringify(payload)
+      body: formData
     });
   },
 
@@ -192,10 +191,18 @@ export const api = {
     return rawRequest("/orders", { method: "GET" });
   },
 
-  updateOrderStatus(id, status) {
-    return rawRequest(`/orders/${encodeURIComponent(id)}/status`, {
-      method: "PATCH",
-      body: JSON.stringify({ status })
-    });
+  updateOrderStatus(id, status, declineReason = "") {
+    return rawRequest(
+      `/orders/${encodeURIComponent(id)}/status`,
+      {
+        method: "PATCH",
+        body: JSON.stringify({
+          status,
+          ...(status === "cancelled"
+            ? { decline_reason: declineReason }
+            : {})
+        })
+      }
+    );
   }
 };

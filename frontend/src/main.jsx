@@ -236,7 +236,7 @@ function formatOrderDate(value) {
 
 function App() {
   const [fillings, setFillings] = useState(SAVED_FILLINGS);
-  const [selectedFilling, setSelectedFilling] = useState(SAVED_DRAFT.selectedFilling || null);
+  const [selectedFillings, setSelectedFillings] = useState(SAVED_DRAFT.selectedFilling ? [SAVED_DRAFT.selectedFilling] : []);
   const [weight, setWeight] = useState(Number(SAVED_DRAFT.weight) || 1);
   const [serverPrice, setServerPrice] = useState(null);
   const [priceLoading, setPriceLoading] = useState(false);
@@ -254,6 +254,8 @@ function App() {
   const [loading, setLoading] = useState(true);
   const [authLoading, setAuthLoading] = useState(false);
   const [paymentOpen, setPaymentOpen] = useState(false);
+  const [declineOrder, setDeclineOrder] = useState(null);
+  const [declineReason, setDeclineReason] = useState("");
   const [paymentLoading, setPaymentLoading] = useState(false);
   const [paymentSuccess, setPaymentSuccess] = useState(false);
   const [paymentOrderId, setPaymentOrderId] = useState("");
@@ -284,20 +286,27 @@ function App() {
         })
       );
     } catch {
-      // The draft is a convenience cache; the order itself is still stored on the server.
+      
     }
-  }, [selectedFilling, weight, design, noDesign, address, photos]);
+  }, [selectedFillings, weight, design, noDesign, address, photos]);
 
   useEffect(() => {
-    if (!selectedFilling || !fillings.length) return;
-    const fresh = fillings.find((item) => item.id === selectedFilling.id);
-    if (fresh && fresh.id !== selectedFilling.id) setSelectedFilling(fresh);
+    if (!selectedFillings.length || !fillings.length) return;
+
+    setSelectedFillings((current) =>
+      current.map((selected) =>
+        fillings.find((item) => item.id === selected.id) || selected
+      )
+    );
   }, [fillings]);
 
-  const total = useMemo(() => {
-    if (!selectedFilling) return 0;
-    return Number(selectedFilling.price || 0) * weight + (noDesign || !design.trim() ? 0 : 700);
-  }, [selectedFilling, weight, design, noDesign]);
+  const total =
+    selectedFillings.reduce(
+      (sum, filling) =>
+        sum + Number(filling.price || 0) *
+          Number(weight) / selectedFillings.length,
+      0
+    ) + (noDesign || !design.trim() ? 0 : 700);
 
   useEffect(() => {
     loadFillings();
@@ -311,41 +320,39 @@ function App() {
     }
   }, [loggedIn, authUser?.role]);
 
-async function loadFillings() {
-  setLoading(true);
-  setNotice("");
+  async function loadFillings() {
+    setLoading(true);
+    setNotice("");
 
-  if (USE_MOCK_FILLINGS) {
-    setFillings(MOCK_FILLINGS);
-    setLoading(false);
-    return;
-  }
-
-  try {
-    const response = await api.getFillings();
-    const serverFillings = normalizeFillings(response);
-    const cached = readLocalJson(FILLINGS_CACHE_KEY, []);
-    const byId = new Map(cached.map((item) => [String(item.id), item]));
-
-    // Keep known hidden fillings in the admin UI even though GET /fillings
-    // intentionally returns only active fillings.
-    serverFillings.forEach((item) => byId.set(String(item.id), item));
-    const merged = Array.from(byId.values());
-
-    setFillings(merged);
-    try {
-      localStorage.setItem(FILLINGS_CACHE_KEY, JSON.stringify(merged));
-    } catch {}
-  } catch (error) {
-    const cached = readLocalJson(FILLINGS_CACHE_KEY, []);
-    setFillings(cached);
-    if (!cached.length) {
-      setNotice(`Не удалось загрузить начинки: ${error.message}`);
+    if (USE_MOCK_FILLINGS) {
+      setFillings(MOCK_FILLINGS);
+      setLoading(false);
+      return;
     }
-  } finally {
-    setLoading(false);
+
+    try {
+      const response = await api.getFillings();
+      const serverFillings = normalizeFillings(response);
+      const cached = readLocalJson(FILLINGS_CACHE_KEY, []);
+      const byId = new Map(cached.map((item) => [String(item.id), item]));
+
+      serverFillings.forEach((item) => byId.set(String(item.id), item));
+      const merged = Array.from(byId.values());
+
+      setFillings(merged);
+      try {
+        localStorage.setItem(FILLINGS_CACHE_KEY, JSON.stringify(merged));
+      } catch {}
+    } catch (error) {
+      const cached = readLocalJson(FILLINGS_CACHE_KEY, []);
+      setFillings(cached);
+      if (!cached.length) {
+        setNotice(`Не удалось загрузить начинки: ${error.message}`);
+      }
+    } finally {
+      setLoading(false);
+    }
   }
-}
   
   async function loadOrders() {
     try {
@@ -419,68 +426,107 @@ async function loadFillings() {
     if (showNotice) setNotice("Вы вышли из аккаунта.");
   }
 
-async function placeOrder() {
-  if (!selectedFilling) {
-    setNotice("Сначала выберите начинку.");
-    return;
+  async function placeOrder() {
+    if (selectedFillings.length === 0) {
+      setNotice("Сначала выберите начинку.");
+      return;
+    }
+
+    if (!loggedIn) {
+      setAuthMode("login");
+      setAuthOpen(true);
+      setNotice(
+        "Для оформления заказа сначала войдите или зарегистрируйтесь."
+      );
+      return;
+    }
+
+    if (!address.trim()) {
+      setNotice("Укажите адрес доставки.");
+      return;
+    }
+
+    try {
+      const formData = new FormData();
+
+      formData.append(
+        "fillings",
+        JSON.stringify(
+          selectedFillings.map((filling) => ({
+            name: filling.name,
+            weight_grams: Math.round(
+              (Number(weight) * 1000) / selectedFillings.length
+            ),
+          }))
+        )
+      );
+
+      formData.append("decoration_wishes", noDesign ? "" : design.trim());
+      formData.append("delivery_address", address.trim());
+
+      photos.forEach((photo) => {
+        formData.append("reference_photos", photo.file);
+      });
+
+      const created = await api.createOrder(formData);
+
+      const orderId =
+        created?.id ??
+        created?.ID ??
+        created?.order_id ??
+        created?.orderId ??
+        `TEST-${Date.now().toString().slice(-6)}`;
+
+      setPaymentOrderId(String(orderId));
+      setPaymentSuccess(false);
+      setPaymentOpen(true);
+
+      await loadOrders();
+    } catch (error) {
+      setNotice(`Не удалось оформить заказ: ${error.message}`);
+    }
   }
 
-  if (!loggedIn) {
-    setAuthMode("login");
-    setAuthOpen(true);
-    setNotice(
-      "Для оформления заказа сначала войдите или зарегистрируйтесь."
+  async function handleMockPayment() {
+    setPaymentLoading(true);
+
+    await new Promise((resolve) =>
+      setTimeout(resolve, 1200)
     );
-    return;
+
+    setPaymentLoading(false);
+    setPaymentSuccess(true);
   }
 
-  if (!address.trim()) {
-    setNotice("Укажите адрес доставки.");
-    return;
-  }
+  function toggleSelectedFilling(filling) {
+    setSelectedFillings((current) => {
+      const alreadySelected = current.some(
+        (item) => item.id === filling.id
+      );
 
-  try {
-    const created = await api.createOrder({
-      fillings: [
-        {
-          name: selectedFilling.name,
-          weight_grams: Math.round(Number(weight) * 1000)
-        }
-      ],
-      decoration_wishes: noDesign ? "" : design.trim(),
-      delivery_address: address.trim()
+      if (alreadySelected) {
+        return current.filter((item) => item.id !== filling.id);
+      }
+
+      if (current.length >= 2) {
+        setNotice("Можно выбрать не более двух начинок.");
+        return current;
+      }
+
+      const next = [...current, filling];
+
+      if (next.length === 2) {
+        setNotice(
+          "Вы выбрали две начинки. Они будут скомбинированы в одном торте, по 50% веса на каждую."
+        );
+      }
+
+      return next;
     });
-
-    const orderId =
-      created?.id ??
-      created?.ID ??
-      created?.order_id ??
-      created?.orderId ??
-      `TEST-${Date.now().toString().slice(-6)}`;
-
-    setPaymentOrderId(String(orderId));
-    setPaymentSuccess(false);
-    setPaymentOpen(true);
-
-    await loadOrders();
-  } catch (error) {
-    setNotice(`Не удалось оформить заказ: ${error.message}`);
   }
-}
-
-async function handleMockPayment() {
-  setPaymentLoading(true);
-
-  await new Promise((resolve) =>
-    setTimeout(resolve, 1200)
-  );
-
-  setPaymentLoading(false);
-  setPaymentSuccess(true);
-}
 
   async function calculateServerPrice() {
-    if (!selectedFilling || !weight) {
+    if (selectedFillings.length === 0 || !weight) {
       setServerPrice(null);
       return;
     }
@@ -489,8 +535,12 @@ async function handleMockPayment() {
 
     try {
       const response = await api.calculatePrice({
-        filling_id: String(selectedFilling.id),
-        weight_kg: Number(weight)
+        fillings: selectedFillings.map((filling) => ({
+          name: filling.name,
+          weight_grams: Math.round(
+            Number(weight) * 1000 / selectedFillings.length
+          )
+        }))
       });
 
       const price =
@@ -501,14 +551,13 @@ async function handleMockPayment() {
         response?.price ??
         response?.Price;
 
-      if (price !== undefined && price !== null) {
-        setServerPrice(Number(price));
-      } else {
-        setServerPrice(null);
-      }
+      setServerPrice(
+        price !== undefined && price !== null
+          ? Number(price)
+          : null
+      );
     } catch (error) {
       setServerPrice(null);
-      //setNotice(`Не удалось рассчитать цену: ${error.message}`);
     } finally {
       setPriceLoading(false);
     }
@@ -516,26 +565,38 @@ async function handleMockPayment() {
 
   useEffect(() => {
     calculateServerPrice();
-  }, [selectedFilling, weight]);
+  }, [selectedFillings, weight]);
 
   async function handlePhotosChange(event) {
     const files = Array.from(event.target.files || []).slice(0, 3);
+
     if (event.target.files?.length > 3) {
       setNotice("Можно прикрепить не более 3 фотографий.");
     }
+
     const valid = files.filter((file) => file.type.startsWith("image/"));
+
     if (valid.length !== files.length) {
       setNotice("Прикреплять можно только изображения.");
     }
 
     try {
       const next = [];
+
       for (const file of valid) {
-        next.push(await readImageAsDataUrl(file));
+        const preview = await readImageAsDataUrl(file);
+
+        next.push({
+          file,
+          name: preview.name,
+          dataUrl: preview.dataUrl,
+        });
       }
+
       setPhotos(next);
+      event.target.value = "";
     } catch {
-      setNotice("Не удалось сохранить одну из фотографий в кэш браузера.");
+      setNotice("Не удалось обработать одну из фотографий.");
     }
   }
 
@@ -644,9 +705,9 @@ async function handleMockPayment() {
     : fillings.filter((filling) => filling.is_active !== false);
   const imageFor = (filling) => filling.image_url || "/cake_header.jpg";
 
-  async function changeOrderStatus(orderId, status) {
+  async function changeOrderStatus(orderId, status, reason = "") {
     try {
-      await api.updateOrderStatus(orderId, status);
+      await api.updateOrderStatus(orderId, status, reason);
 
       setOrders((current) =>
         current.map((order) =>
@@ -656,7 +717,13 @@ async function handleMockPayment() {
         )
       );
 
-      setNotice("Статус заказа изменён.");
+      setDeclineOrder(null);
+      setDeclineReason("");
+      setNotice(
+        status === "cancelled"
+          ? "Заказ отменён."
+          : "Статус заказа изменён."
+      );
     } catch (error) {
       setNotice(`Не удалось изменить статус: ${error.message}`);
     }
@@ -765,9 +832,18 @@ async function handleMockPayment() {
                         <select
                           className="order-status-select"
                           value={order.status}
-                          onChange={(event) =>
-                            changeOrderStatus(order.id, event.target.value)
-                          }
+                          onChange={(event) => {
+                            const status = event.target.value;
+
+                            if (status === "cancelled") {
+                              setDeclineOrder(order);
+                              setDeclineReason("");
+                              event.target.value = order.status;
+                              return;
+                            }
+
+                            changeOrderStatus(order.id, status);
+                          }}
                         >
                           <option value="processing">В процессе</option>
                           <option value="ready">Готов</option>
@@ -811,17 +887,18 @@ async function handleMockPayment() {
                 <article
                   className={[
                     "filling-card",
-                    selectedFilling?.id === filling.id ? "selected" : "",
+                    selectedFillings.some(
+                      (item) => item.id === filling.id) ? "selected" : "",
                     filling.is_active === false ? "inactive" : ""
                   ].filter(Boolean).join(" ")}
                   key={filling.id}
                   role="button"
                   tabIndex={0}
-                  onClick={() => setSelectedFilling(filling)}
+                  onClick={() => toggleSelectedFilling(filling)}
                   onKeyDown={(event) => {
                     if (event.key === "Enter" || event.key === " ") {
                       event.preventDefault();
-                      setSelectedFilling(filling);
+                      toggleSelectedFilling(filling);
                     }
                   }}
                 >
@@ -865,8 +942,25 @@ async function handleMockPayment() {
               </div>
               <div className="selected-summary">
                 <span>Начинка</span>
-                <strong>{selectedFilling?.name || "Ещё не выбрана"}</strong>
+                <strong>
+                  {selectedFillings.length === 0
+                    ? "Ещё не выбрана"
+                    : selectedFillings.length === 1
+                      ? selectedFillings[0].name
+                      : `${selectedFillings[0].name} + ${selectedFillings[1].name} (50/50)`}
+                </strong>
               </div>
+              {selectedFillings.length === 2 && (
+                <div className="order-alert">
+                  <div>
+                    <strong>Комбинация 50/50</strong>
+                    <span>
+                      Обе начинки будут в одном торте. Вес каждой —
+                      {" "}{Number(weight) / 2} кг.
+                    </span>
+                  </div>
+                </div>
+              )}
             </div>
 
             {!address.trim() && (
@@ -928,8 +1022,9 @@ async function handleMockPayment() {
                   id="references"
                   className="reference-input"
                   type="file"
-                  accept="image/*"
+                  accept="image/jpeg,image/png,image/gif,image/webp"
                   multiple
+                  onChange={handlePhotosChange}
                 />
                 <small className="field-hint">Можно прикрепить от 0 до 3 фото.</small>
                 {photos.length > 0 && (
@@ -965,7 +1060,7 @@ async function handleMockPayment() {
                       ? "Рассчитываем…"
                       : serverPrice !== null
                         ? formatPrice(serverPrice)
-                        : selectedFilling
+                        : selectedFillings
                           ? formatPrice(total)
                           : "—"}
                   </strong>
@@ -975,7 +1070,7 @@ async function handleMockPayment() {
                   <button
                     className="button button-accent checkout-button"
                     onClick={placeOrder}
-                    disabled={!selectedFilling || priceLoading}
+                    disabled={!selectedFillings || priceLoading}
                   >
                     Оформить заказ
                     <ShoppingBag size={18} />
@@ -986,6 +1081,60 @@ async function handleMockPayment() {
           </section>
         )}
       </main>
+
+      {declineOrder && (
+        <div className="modal-backdrop">
+          <div
+            className="modal-card"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="decline-title"
+          >
+            <h2 id="decline-title">Причина отказа</h2>
+
+            <p>
+              Укажите причину отмены заказа №{declineOrder.id}.
+            </p>
+
+            <textarea
+              value={declineReason}
+              onChange={(event) =>
+                setDeclineReason(event.target.value)
+              }
+              placeholder="Например: невозможно выполнить заказ в указанный срок"
+              rows={4}
+            />
+
+            <div className="modal-actions">
+              <button
+                type="button"
+                className="button button-light"
+                onClick={() => {
+                  setDeclineOrder(null);
+                  setDeclineReason("");
+                }}
+              >
+                Назад
+              </button>
+
+              <button
+                type="button"
+                className="button button-accent"
+                disabled={!declineReason.trim()}
+                onClick={() =>
+                  changeOrderStatus(
+                    declineOrder.id,
+                    "cancelled",
+                    declineReason.trim()
+                  )
+                }
+              >
+                Подтвердить отказ
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <footer className="site-footer">
         <div className="footer-inner">
