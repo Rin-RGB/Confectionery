@@ -1052,13 +1052,17 @@ textarea::placeholder, input::placeholder { color: rgba(48,26,6,.38); }
 
 .reference-input {
   position: absolute;
+  top: 0;
+  left: 0;
   width: 1px;
   height: 1px;
   opacity: 0;
   pointer-events: none;
+  overflow: hidden;
 }
 
 .reference-upload {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
