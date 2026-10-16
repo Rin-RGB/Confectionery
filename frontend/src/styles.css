@@ -353,7 +353,7 @@ h1 {
   grid-template-columns: 1fr 1.25fr;
   gap: 48px 72px;
 }
-.form-block { min-width: 0; }
+.form-block { min-width: 0; position: relative; }
 .form-block > label:first-child {
   display: flex;
   align-items: center;

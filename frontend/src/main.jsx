@@ -154,9 +154,9 @@ function normalizeFillings(payload) {
   const list = Array.isArray(payload)
     ? payload
     : payload?.fillings ||
-      payload?.items ||
-      payload?.data ||
-      [];
+    payload?.items ||
+    payload?.data ||
+    [];
 
   return list
     .map((item) => ({
@@ -327,7 +327,7 @@ function App() {
         })
       );
     } catch {
-      
+
     }
   }, [selectedFillings, weight, design, noDesign, address, photos]);
 
@@ -345,7 +345,7 @@ function App() {
     selectedFillings.reduce(
       (sum, filling) =>
         sum + Number(filling.price || 0) *
-          Number(weight) / selectedFillings.length,
+        Number(weight) / selectedFillings.length,
       0
     ) + (noDesign || !design.trim() ? 0 : 700);
 
@@ -383,7 +383,7 @@ function App() {
       setFillings(merged);
       try {
         localStorage.setItem(FILLINGS_CACHE_KEY, JSON.stringify(merged));
-      } catch {}
+      } catch { }
     } catch (error) {
       const cached = readLocalJson(FILLINGS_CACHE_KEY, []);
       setFillings(cached);
@@ -394,7 +394,7 @@ function App() {
       setLoading(false);
     }
   }
-  
+
   async function loadOrders() {
     try {
       const response =
@@ -537,6 +537,7 @@ function App() {
 
     setPaymentLoading(false);
     setPaymentSuccess(true);
+    resetOrderForm();
   }
 
   function toggleSelectedFilling(filling) {
@@ -692,7 +693,7 @@ function App() {
         );
         try {
           localStorage.setItem(FILLINGS_CACHE_KEY, JSON.stringify(next));
-        } catch {}
+        } catch { }
         return next;
       });
       setNotice("Начинка обновлена.");
@@ -715,7 +716,7 @@ function App() {
         );
         try {
           localStorage.setItem(FILLINGS_CACHE_KEY, JSON.stringify(next));
-        } catch {}
+        } catch { }
         return next;
       });
 
@@ -727,6 +728,21 @@ function App() {
     } catch (error) {
       setNotice(`Не удалось изменить доступность: ${error.message}`);
     }
+  }
+
+
+  function resetOrderForm() {
+    setSelectedFillings([]);
+    setWeight(1);
+    setDesign("");
+    setNoDesign(false);
+    setAddress("");
+    setPhotos([]);
+    setServerPrice(null);
+
+    try {
+      localStorage.removeItem(DRAFT_KEY);
+    } catch { }
   }
 
   const filteredOrders = orders.filter((order) => orderTabForStatus(order.status) === orderTab);
@@ -759,7 +775,7 @@ function App() {
       setNotice(`Не удалось изменить статус: ${error.message}`);
     }
   }
-  
+
   return (
     <div className="app-shell">
       <main id="top">
@@ -770,157 +786,157 @@ function App() {
           </div>
         </section>
 
-          <section className="content-section orders-section" id="orders">
-            <div className="section-heading">
-              <div>
-                <p className="eyebrow">Личный кабинет</p>
-                <h2>{authUser?.role === "admin" ? "Заказы" : "Ваши заказы"}</h2>
+        <section className="content-section orders-section" id="orders">
+          <div className="section-heading">
+            <div>
+              <p className="eyebrow">Личный кабинет</p>
+              <h2>{authUser?.role === "admin" ? "Заказы" : "Ваши заказы"}</h2>
+            </div>
+
+            {loggedIn ? (
+              <div className="account-actions">
+                <span className="account-email">{authUser?.role === "admin" ? "Администратор" : "Личный кабинет"}</span>
+                <button className="button button-light" onClick={() => handleLogout()}>
+                  <LogOut size={17} /> Выйти
+                </button>
               </div>
+            ) : (
+              <button className="button button-light" onClick={() => {
+                setAuthMode("login");
+                setAuthOpen(true);
+              }}>
+                <LogIn size={17} /> Войти
+              </button>
+            )}
+          </div>
 
-              {loggedIn ? (
-                <div className="account-actions">
-                  <span className="account-email">{authUser?.role === "admin" ? "Администратор" : "Личный кабинет"}</span>
-                  <button className="button button-light" onClick={() => handleLogout()}>
-                    <LogOut size={17} /> Выйти
-                  </button>
-                </div>
-              ) : (
-                <button className="button button-light" onClick={() => {
-                  setAuthMode("login");
-                  setAuthOpen(true);
-                }}>
-                  <LogIn size={17} /> Войти
-                </button>
-              )}
-            </div>
+          <div className="tabs" role="tablist">
+            {[
+              ["processing", "Активные"],
+              ["ready", "Готовые"],
+              ["cancelled", "Отменённые"]
+            ].map(([key, label]) => (
+              <button
+                key={key}
+                className={orderTab === key ? "tab active" : "tab"}
+                onClick={() => setOrderTab(key)}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
 
-            <div className="tabs" role="tablist">
-              {[
-                ["processing", "Активные"],
-                ["ready", "Готовые"],
-                ["cancelled", "Отменённые"]
-              ].map(([key, label]) => (
-                <button
-                  key={key}
-                  className={orderTab === key ? "tab active" : "tab"}
-                  onClick={() => setOrderTab(key)}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
+          <div className="orders-list">
+            {!loggedIn ? (
+              <div className="empty-state">
+                Войдите в аккаунт, чтобы увидеть свои заказы.
+              </div>
+            ) : filteredOrders.length === 0 ? (
+              <div className="empty-state">Здесь пока нет заказов.</div>
+            ) : (
+              filteredOrders.map((order) => (
+                <article className="order-row" key={order.id}>
+                  <div className="order-id">
+                    <span>Заказ</span>
+                    <strong>{order.id}</strong>
+                  </div>
 
-            <div className="orders-list">
-              {!loggedIn ? (
-                <div className="empty-state">
-                  Войдите в аккаунт, чтобы увидеть свои заказы.
-                </div>
-              ) : filteredOrders.length === 0 ? (
-                <div className="empty-state">Здесь пока нет заказов.</div>
-              ) : (
-                filteredOrders.map((order) => (
-                  <article className="order-row" key={order.id}>
-                    <div className="order-id">
-                      <span>Заказ</span>
-                      <strong>{order.id}</strong>
-                    </div>
+                  <div>
+                    <span className="order-muted">Дата</span>
+                    <strong>{formatOrderDate(order.date)}</strong>
+                  </div>
 
-                    <div>
-                      <span className="order-muted">Дата</span>
-                      <strong>{formatOrderDate(order.date)}</strong>
-                    </div>
+                  <div>
+                    <span className="order-muted">Начинка</span>
+                    <strong>{order.filling}</strong>
+                  </div>
 
-                    <div>
-                      <span className="order-muted">Начинка</span>
-                      <strong>{order.filling}</strong>
-                    </div>
+                  <div>
+                    <span className="order-muted">Пожелания</span>
+                    <strong>{order.decoration || "—"}</strong>
+                  </div>
 
-                    <div>
-                      <span className="order-muted">Пожелания</span>
-                      <strong>{order.decoration || "—"}</strong>
-                    </div>
-
-                    {role === "admin" && (
-                      <div className="order-photos-cell">
-                        <span className="order-muted">Референсы</span>
-                        {order.referencePhotos?.length ? (
-                          <div className="order-photo-list">
-                            {order.referencePhotos.map((fileName) => (
-                              <OrderPhotoThumbnail
-                                key={fileName}
-                                orderId={order.id}
-                                fileName={fileName}
-                                onOpen={setPreviewPhoto}
-                              />
-                            ))}
-                          </div>
-                        ) : (
-                          <strong>—</strong>
-                        )}
-                      </div>
-                    )}
-
-                    <div>
-                      <span className="order-muted">Вес</span>
-                      <strong>{order.weight} кг</strong>
-                    </div>
-
-                    <div>
-                      <span className="order-muted">Адрес</span>
-                      <strong>{order.address || "—"}</strong>
-                    </div>
-
-                    <div className="order-right">
-                      <strong className="order-price">
-                        {formatPrice(order.price)}
-                      </strong>
-
-                      <span className={`order-status-badge status-${order.status}`}>
-                        {orderStatusLabel(order.status)}
-                      </span>
-
-                      {role === "admin" && (
-                        <select
-                          className="order-status-select"
-                          value={order.status}
-                          onChange={(event) => {
-                            const status = event.target.value;
-
-                            if (status === "cancelled") {
-                              setDeclineOrder(order);
-                              setDeclineReason("");
-                              event.target.value = order.status;
-                              return;
-                            }
-
-                            changeOrderStatus(order.id, status);
-                          }}
-                        >
-                          <option value="processing">В процессе</option>
-                          <option value="ready">Готов</option>
-                          <option value="cancelled">Отменён</option>
-                        </select>
+                  {role === "admin" && (
+                    <div className="order-photos-cell">
+                      <span className="order-muted">Референсы</span>
+                      {order.referencePhotos?.length ? (
+                        <div className="order-photo-list">
+                          {order.referencePhotos.map((fileName) => (
+                            <OrderPhotoThumbnail
+                              key={fileName}
+                              orderId={order.id}
+                              fileName={fileName}
+                              onOpen={setPreviewPhoto}
+                            />
+                          ))}
+                        </div>
+                      ) : (
+                        <strong>—</strong>
                       )}
                     </div>
-                  </article>
-                ))
-              )}
-            </div>
-          </section>
+                  )}
+
+                  <div>
+                    <span className="order-muted">Вес</span>
+                    <strong>{order.weight} кг</strong>
+                  </div>
+
+                  <div>
+                    <span className="order-muted">Адрес</span>
+                    <strong>{order.address || "—"}</strong>
+                  </div>
+
+                  <div className="order-right">
+                    <strong className="order-price">
+                      {formatPrice(order.price)}
+                    </strong>
+
+                    <span className={`order-status-badge status-${order.status}`}>
+                      {orderStatusLabel(order.status)}
+                    </span>
+
+                    {role === "admin" && (
+                      <select
+                        className="order-status-select"
+                        value={order.status}
+                        onChange={(event) => {
+                          const status = event.target.value;
+
+                          if (status === "cancelled") {
+                            setDeclineOrder(order);
+                            setDeclineReason("");
+                            event.target.value = order.status;
+                            return;
+                          }
+
+                          changeOrderStatus(order.id, status);
+                        }}
+                      >
+                        <option value="processing">В процессе</option>
+                        <option value="ready">Готов</option>
+                        <option value="cancelled">Отменён</option>
+                      </select>
+                    )}
+                  </div>
+                </article>
+              ))
+            )}
+          </div>
+        </section>
 
 
         <section className="content-section filling-section" id="filling">
           <div className="section-heading">
-              {role === "admin" && (
-                <div>
-                  <h2>Начинки</h2>
-                </div>
-              )}
-              {role !== "admin" && (
-                <div>
-                  <h2>Выберите начинку</h2>
-                </div>
-              )}
+            {role === "admin" && (
+              <div>
+                <h2>Начинки</h2>
+              </div>
+            )}
+            {role !== "admin" && (
+              <div>
+                <h2>Выберите начинку</h2>
+              </div>
+            )}
 
 
             {role === "admin" && (
@@ -1050,7 +1066,7 @@ function App() {
                   placeholder="Город, улица, дом, квартира"
                 />
               </div>
-              
+
               <div className="form-block">
                 <label htmlFor="references"><ImagePlus size={17} /> Референсы</label>
                 <label htmlFor="references" className="reference-upload">
@@ -1202,7 +1218,7 @@ function App() {
                     setNotice("Заполните поле причины отказа");
                     return;
                   }
-    
+
                   changeOrderStatus(
                     declineOrder.id,
                     "cancelled",
