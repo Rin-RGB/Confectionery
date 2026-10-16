@@ -1,0 +1,6 @@
+DROP TABLE IF EXISTS order_fillings;
+DROP TABLE IF EXISTS orders;
+DROP TABLE IF EXISTS fillings;
+DROP TABLE IF EXISTS auth_sessions;
+DROP TABLE IF EXISTS users;
+DROP TYPE IF EXISTS user_role;
