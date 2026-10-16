@@ -609,36 +609,26 @@ function App() {
   }, [selectedFillings, weight]);
 
   async function handlePhotosChange(event) {
-    const files = Array.from(event.target.files || []).slice(0, 3);
+    const files = Array.from(event.target.files || []);
+    const remaining = Math.max(0, 3 - photos.length);
+    const selected = files.slice(0, remaining);
 
-    if (event.target.files?.length > 3) {
-      setNotice("Можно прикрепить не более 3 фотографий.");
+    const next = [];
+
+    for (const file of selected) {
+      if (!file.type.startsWith("image/")) continue;
+
+      const preview = await readImageAsDataUrl(file);
+
+      next.push({
+        file,
+        name: preview.name,
+        dataUrl: preview.dataUrl,
+      });
     }
 
-    const valid = files.filter((file) => file.type.startsWith("image/"));
-
-    if (valid.length !== files.length) {
-      setNotice("Прикреплять можно только изображения.");
-    }
-
-    try {
-      const next = [];
-
-      for (const file of valid) {
-        const preview = await readImageAsDataUrl(file);
-
-        next.push({
-          file,
-          name: preview.name,
-          dataUrl: preview.dataUrl,
-        });
-      }
-
-      setPhotos(next);
-      event.target.value = "";
-    } catch {
-      setNotice("Не удалось обработать одну из фотографий.");
-    }
+    setPhotos((current) => [...current, ...next].slice(0, 3));
+    event.target.value = "";
   }
 
   function removePhoto(index) {
@@ -784,7 +774,7 @@ function App() {
             <div className="section-heading">
               <div>
                 <p className="eyebrow">Личный кабинет</p>
-                <h2>Ваши заказы</h2>
+                <h2>{authUser?.role === "admin" ? "Заказы" : "Ваши заказы"}</h2>
               </div>
 
               {loggedIn ? (
@@ -1207,14 +1197,18 @@ function App() {
               <button
                 type="button"
                 className="button button-accent"
-                disabled={!declineReason.trim()}
-                onClick={() =>
+                onClick={() => {
+                  if (!declineReason.trim()) {
+                    setNotice("Заполните поле причины отказа");
+                    return;
+                  }
+    
                   changeOrderStatus(
                     declineOrder.id,
                     "cancelled",
                     declineReason.trim()
-                  )
-                }
+                  );
+                }}
               >
                 Подтвердить отказ
               </button>
