@@ -201,6 +201,7 @@ function normalizeOrders(payload) {
       weight: Number(item.weight_grams ?? 0) / 1000,
       price: Number(item.total_price ?? 0),
       status: item.status ?? "accepted",
+      declineReason: item.decline_reason ?? item.DeclineReason ?? "",
       decoration: item.decoration_wishes ?? "",
       referencePhotos: item.reference_photos ?? item.ReferencePhotos ?? [],
       address: item.delivery_address ?? ""
@@ -218,7 +219,7 @@ function orderStatusLabel(status) {
   return {
     accepted: "Принят",
     processing: "В работе",
-    ready: "Готов к выдаче",
+    ready: "Готов",
     cancelled: "Отменён"
   }[status] || status || "Статус уточняется";
 }
@@ -537,6 +538,7 @@ function App() {
 
     setPaymentLoading(false);
     setPaymentSuccess(true);
+    resetOrderForm();
   }
 
   function toggleSelectedFilling(filling) {
@@ -725,9 +727,23 @@ function App() {
 
       setNotice(filling.is_active ? "Начинка скрыта." : "Начинка снова доступна.");
     } catch (error) {
-      setNotice(`Не удалось изменить доступность: ${error.message}`);
+      //setNotice(`Не удалось изменить доступность: ${error.message}`);
     }
   }
+
+    function resetOrderForm() {
+      setSelectedFillings([]);
+      setWeight(1);
+      setDesign("");
+      setNoDesign(false);
+      setAddress("");
+      setPhotos([]);
+      setServerPrice(null);
+
+      try {
+        localStorage.removeItem(DRAFT_KEY);
+      } catch { }
+    }
 
   const filteredOrders = orders.filter((order) => orderTabForStatus(order.status) === orderTab);
   const role = authUser?.role;
@@ -840,6 +856,13 @@ function App() {
                       <strong>{order.decoration || "—"}</strong>
                     </div>
 
+                    {order.status === "cancelled" && (
+                      <div>
+                        <span className="order-muted">Причина отмены</span>
+                        <strong>{order.declineReason}</strong>
+                      </div>
+                    )}
+
                     {role === "admin" && (
                       <div className="order-photos-cell">
                         <span className="order-muted">Референсы</span>
@@ -867,7 +890,7 @@ function App() {
 
                     <div>
                       <span className="order-muted">Адрес</span>
-                      <strong>{order.address || "—"}</strong>
+                      <strong>{order.address}</strong>
                     </div>
 
                     <div className="order-right">
@@ -896,6 +919,7 @@ function App() {
                             changeOrderStatus(order.id, status);
                           }}
                         >
+                          <option value="accepted">Принят</option>
                           <option value="processing">В процессе</option>
                           <option value="ready">Готов</option>
                           <option value="cancelled">Отменён</option>
