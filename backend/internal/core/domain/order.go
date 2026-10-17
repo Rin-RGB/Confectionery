@@ -48,6 +48,7 @@ type Order struct {
 	TotalPrice       float64
 	Status           OrderStatus
 	ReferencePhotos  []string
+	DeclineReason    string
 	CreatedAt        time.Time
 	UpdatedAt        time.Time
 }

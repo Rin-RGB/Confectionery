@@ -188,7 +188,7 @@ func (r *Repository) GetOrderByID(ctx context.Context, orderID string) (domain.O
 
 	const orderQuery = `
 		SELECT id, user_id, weight_grams, COALESCE(decoration_wishes, ''),
-			delivery_address, total_price, status, created_at, updated_at
+			delivery_address, total_price, status, created_at, updated_at,COALESCE(decline_reason,'')
 		FROM orders
 		WHERE id = $1
 	`
@@ -207,6 +207,7 @@ func (r *Repository) GetOrderByID(ctx context.Context, orderID string) (domain.O
 		&order.Status,
 		&order.CreatedAt,
 		&order.UpdatedAt,
+		&order.DeclineReason,
 	); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return domain.Order{}, coreerrors.ErrOrderNotFound
