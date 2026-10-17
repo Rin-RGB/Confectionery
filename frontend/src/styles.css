@@ -238,22 +238,7 @@ h1 {
   border-bottom-color: var(--accent);
 }
 
-.order-row {
-  min-height: 94px;
-  display: grid;
-  grid-template-columns: 90px 150px 130px 70px minmax(160px, 1fr) auto;
-  align-items: center;
-  gap: 14px;
-  border-bottom: 1px solid var(--border);
-}
 
-.order-row > .order-right {
-  flex-direction: row !important;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 10px;
-  white-space: nowrap;
-}
 .order-row strong { font-size: 15px; }
 .order-id strong { font-family: "Cormorant SC", Georgia, serif; font-size: 21px; }
 .order-muted { font-size: 12px; opacity: .55; }

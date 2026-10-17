@@ -914,11 +914,11 @@ function App() {
                       {formatPrice(order.price)}
                     </strong>
 
-                    <span
+                    {role !== "admin" && (<span
                       className={`order-status-badge status-${order.status}`}
                     >
                       {orderStatusLabel(order.status)}
-                    </span>
+                    </span>)}
 
                     {role === "admin" && (
                       <select
@@ -938,7 +938,7 @@ function App() {
                         }}
                       >
                         <option value="accepted">Принят</option>
-                        <option value="processing">В процессе</option>
+                        <option value="processing">В работе</option>
                         <option value="ready">Готов</option>
                         <option value="cancelled">Отменён</option>
                       </select>
