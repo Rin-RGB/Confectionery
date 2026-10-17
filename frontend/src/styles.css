@@ -529,7 +529,7 @@ textarea::placeholder, input::placeholder { color: rgba(48,26,6,.38); }
   position: fixed;
   right: 22px;
   bottom: 22px;
-  z-index: 100;
+  z-index: 1000;
   max-width: min(430px, calc(100vw - 44px));
   display: flex;
   align-items: center;

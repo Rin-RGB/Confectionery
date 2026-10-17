@@ -276,7 +276,13 @@ function OrderPhotoThumbnail({ orderId, fileName, onOpen }) {
 
 function App() {
   const [fillings, setFillings] = useState(SAVED_FILLINGS);
-  const [selectedFillings, setSelectedFillings] = useState(SAVED_DRAFT.selectedFilling ? [SAVED_DRAFT.selectedFilling] : []);
+
+  const [selectedFillings, setSelectedFillings] = useState(() => {
+    if (Array.isArray(SAVED_DRAFT.selectedFillings)) return SAVED_DRAFT.selectedFillings;
+    if (SAVED_DRAFT.selectedFilling) return [SAVED_DRAFT.selectedFilling];
+    return [];
+  });
+
   const [weight, setWeight] = useState(Number(SAVED_DRAFT.weight) || 1);
   const [serverPrice, setServerPrice] = useState(null);
   const [priceLoading, setPriceLoading] = useState(false);
@@ -318,7 +324,7 @@ function App() {
       localStorage.setItem(
         DRAFT_KEY,
         JSON.stringify({
-          selectedFilling,
+          selectedFillings,
           weight,
           design,
           noDesign,
