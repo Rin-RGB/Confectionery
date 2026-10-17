@@ -352,6 +352,7 @@ h1 {
   display: grid;
   grid-template-columns: 1fr 1.25fr;
   gap: 48px 72px;
+  position: relative;
 }
 .form-block { min-width: 0; position: relative; }
 .form-block > label:first-child {
@@ -793,7 +794,7 @@ textarea::placeholder, input::placeholder { color: rgba(48,26,6,.38); }
 }
 
 .order-status-select {
-  min-width: 150px;
+  max-width: 110px;
   padding: 10px 12px;
   border: 1px solid #d8cfc5;
   border-radius: 10px;
@@ -1180,6 +1181,8 @@ textarea::placeholder, input::placeholder { color: rgba(48,26,6,.38); }
   font-size: 10px;
   font-weight: 800;
   white-space: nowrap;
+  min-width: 55px;
+  max-width: 55px;
 }
 
 .status-accepted {
@@ -1391,4 +1394,39 @@ textarea::placeholder, input::placeholder { color: rgba(48,26,6,.38); }
   color: white;
   background: rgba(255, 255, 255, 0.15);
   cursor: pointer;
+}
+
+.order-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px;
+  padding: 16px 0;
+  border-bottom: 1px solid var(--border);
+  min-height: 94px;
+}
+
+.order-row>div {
+  flex: 1 1 auto;
+  min-width: 90px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.order-row>.order-id {
+  flex: 0 0 90px;
+}
+
+.order-row>.order-photos-cell {
+  flex: 0 0 100px;
+}
+
+.order-row>.order-right {
+  flex: 0 0 auto;
+  margin-left: auto;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
 }

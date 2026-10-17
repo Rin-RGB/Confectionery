@@ -136,7 +136,6 @@ const MOCK_FILLINGS = [
   }
 ];
 
-
 function formatPrice(value) {
   return new Intl.NumberFormat("ru-RU").format(Number(value) || 0) + " ₽";
 }
@@ -170,26 +169,18 @@ function normalizeFillings(payload) {
         item.Price ??
         0
       ),
-      note:
-        item.description ??
-        item.Description ??
-        "",
+      note: item.description ?? item.Description ?? "",
       image_url: item.image_name
         ? `http://localhost:8080/static/fillings/${item.image_name}`
         : "",
       is_active:
-        item.is_active ??
-        item.isActive ??
-        item.IsActive ??
-        true
+        item.is_active ?? item.isActive ?? item.IsActive ?? true
     }))
     .filter((item) => item.id && item.name);
 }
 
 function normalizeOrders(payload) {
-  const list = Array.isArray(payload)
-    ? payload
-    : [payload];
+  const list = Array.isArray(payload) ? payload : [payload];
 
   return list.map((item) => {
     const fillings = item.fillings ?? [];
@@ -197,10 +188,13 @@ function normalizeOrders(payload) {
     return {
       id: item.id,
       date: item.created_at,
-      filling: fillings.length ? fillings.map((f) => f.name).filter(Boolean).join(", ") : "—",
+      filling: fillings.length
+        ? fillings.map((f) => f.name).filter(Boolean).join(", ")
+        : "—",
       weight: Number(item.weight_grams ?? 0) / 1000,
       price: Number(item.total_price ?? 0),
       status: item.status ?? "accepted",
+      declineReason: item.decline_reason ?? item.DeclineReason ?? "",
       decoration: item.decoration_wishes ?? "",
       referencePhotos: item.reference_photos ?? item.ReferencePhotos ?? [],
       address: item.delivery_address ?? ""
@@ -215,12 +209,16 @@ function orderTabForStatus(status) {
 }
 
 function orderStatusLabel(status) {
-  return {
-    accepted: "Принят",
-    processing: "В работе",
-    ready: "Готов к выдаче",
-    cancelled: "Отменён"
-  }[status] || status || "Статус уточняется";
+  return (
+    {
+      accepted: "Принят",
+      processing: "В работе",
+      ready: "Готов",
+      cancelled: "Отменён"
+    }[status] ||
+    status ||
+    "Статус уточняется"
+  );
 }
 
 function formatOrderDate(value) {
@@ -242,7 +240,8 @@ function OrderPhotoThumbnail({ orderId, fileName, onOpen }) {
   useEffect(() => {
     let objectUrl = "";
 
-    api.getOrderPhoto(orderId, fileName)
+    api
+      .getOrderPhoto(orderId, fileName)
       .then((blob) => {
         objectUrl = URL.createObjectURL(blob);
         setSrc(objectUrl);
@@ -278,7 +277,8 @@ function App() {
   const [fillings, setFillings] = useState(SAVED_FILLINGS);
 
   const [selectedFillings, setSelectedFillings] = useState(() => {
-    if (Array.isArray(SAVED_DRAFT.selectedFillings)) return SAVED_DRAFT.selectedFillings;
+    if (Array.isArray(SAVED_DRAFT.selectedFillings))
+      return SAVED_DRAFT.selectedFillings;
     if (SAVED_DRAFT.selectedFilling) return [SAVED_DRAFT.selectedFilling];
     return [];
   });
@@ -292,7 +292,6 @@ function App() {
   const [photos, setPhotos] = useState(SAVED_DRAFT.photos || []);
   const [orders, setOrders] = useState([]);
   const [orderTab, setOrderTab] = useState("processing");
-  const [ordersOpen, setOrdersOpen] = useState(false);
   const [authOpen, setAuthOpen] = useState(false);
   const [authMode, setAuthMode] = useState("login");
   const [addOpen, setAddOpen] = useState(false);
@@ -332,17 +331,16 @@ function App() {
           photos
         })
       );
-    } catch {
-
-    }
+    } catch { }
   }, [selectedFillings, weight, design, noDesign, address, photos]);
 
   useEffect(() => {
     if (!selectedFillings.length || !fillings.length) return;
 
     setSelectedFillings((current) =>
-      current.map((selected) =>
-        fillings.find((item) => item.id === selected.id) || selected
+      current.map(
+        (selected) =>
+          fillings.find((item) => item.id === selected.id) || selected
       )
     );
   }, [fillings]);
@@ -350,8 +348,9 @@ function App() {
   const total =
     selectedFillings.reduce(
       (sum, filling) =>
-        sum + Number(filling.price || 0) *
-        Number(weight) / selectedFillings.length,
+        sum +
+        (Number(filling.price || 0) * Number(weight)) /
+        selectedFillings.length,
       0
     ) + (noDesign || !design.trim() ? 0 : 700);
 
@@ -408,9 +407,7 @@ function App() {
           ? await api.getAllOrders()
           : await api.getMyOrders();
 
-      const list = Array.isArray(response)
-        ? response
-        : [];
+      const list = Array.isArray(response) ? response : [];
 
       console.log("ORDERS FROM LIST:", list);
       const details = await Promise.all(
@@ -450,14 +447,19 @@ function App() {
     setAuthLoading(true);
 
     try {
-      const tokens = authMode === "register"
-        ? await api.register(email, password)
-        : await api.login(email, password);
+      const tokens =
+        authMode === "register"
+          ? await api.register(email, password)
+          : await api.login(email, password);
 
       authStorage.set(tokens);
       setAuthUser(decodeJwt(tokens.access_token));
       setAuthOpen(false);
-      setNotice(authMode === "register" ? "Регистрация выполнена." : "Вы вошли в аккаунт.");
+      setNotice(
+        authMode === "register"
+          ? "Регистрация выполнена."
+          : "Вы вошли в аккаунт."
+      );
       await loadOrders();
     } catch (error) {
       setNotice(error.message);
@@ -482,9 +484,7 @@ function App() {
     if (!loggedIn) {
       setAuthMode("login");
       setAuthOpen(true);
-      setNotice(
-        "Для оформления заказа сначала войдите или зарегистрируйтесь."
-      );
+      setNotice("Для оформления заказа сначала войдите или зарегистрируйтесь.");
       return;
     }
 
@@ -503,7 +503,7 @@ function App() {
             name: filling.name,
             weight_grams: Math.round(
               (Number(weight) * 1000) / selectedFillings.length
-            ),
+            )
           }))
         )
       );
@@ -537,9 +537,7 @@ function App() {
   async function handleMockPayment() {
     setPaymentLoading(true);
 
-    await new Promise((resolve) =>
-      setTimeout(resolve, 1200)
-    );
+    await new Promise((resolve) => setTimeout(resolve, 1200));
 
     setPaymentLoading(false);
     setPaymentSuccess(true);
@@ -548,9 +546,7 @@ function App() {
 
   function toggleSelectedFilling(filling) {
     setSelectedFillings((current) => {
-      const alreadySelected = current.some(
-        (item) => item.id === filling.id
-      );
+      const alreadySelected = current.some((item) => item.id === filling.id);
 
       if (alreadySelected) {
         return current.filter((item) => item.id !== filling.id);
@@ -586,7 +582,7 @@ function App() {
         fillings: selectedFillings.map((filling) => ({
           name: filling.name,
           weight_grams: Math.round(
-            Number(weight) * 1000 / selectedFillings.length
+            (Number(weight) * 1000) / selectedFillings.length
           )
         }))
       });
@@ -600,9 +596,7 @@ function App() {
         response?.Price;
 
       setServerPrice(
-        price !== undefined && price !== null
-          ? Number(price)
-          : null
+        price !== undefined && price !== null ? Number(price) : null
       );
     } catch (error) {
       setServerPrice(null);
@@ -630,7 +624,7 @@ function App() {
       next.push({
         file,
         name: preview.name,
-        dataUrl: preview.dataUrl,
+        dataUrl: preview.dataUrl
       });
     }
 
@@ -695,7 +689,9 @@ function App() {
 
       setFillings((current) => {
         const next = current.map((item) =>
-          item.id === filling.id ? { ...item, ...normalized, is_active: filling.is_active } : item
+          item.id === filling.id
+            ? { ...item, ...normalized, is_active: filling.is_active }
+            : item
         );
         try {
           localStorage.setItem(FILLINGS_CACHE_KEY, JSON.stringify(next));
@@ -718,7 +714,9 @@ function App() {
 
       setFillings((current) => {
         const next = current.map((item) =>
-          item.id === filling.id ? { ...item, is_active: !filling.is_active } : item
+          item.id === filling.id
+            ? { ...item, is_active: !filling.is_active }
+            : item
         );
         try {
           localStorage.setItem(FILLINGS_CACHE_KEY, JSON.stringify(next));
@@ -726,16 +724,17 @@ function App() {
         return next;
       });
 
-      if (selectedFilling?.id === filling.id && filling.is_active) {
-        setSelectedFilling(null);
+      if (selectedFillings.some((item) => item.id === filling.id) && filling.is_active) {
+        setSelectedFillings((current) => current.filter((item) => item.id !== filling.id));
       }
 
-      setNotice(filling.is_active ? "Начинка скрыта." : "Начинка снова доступна.");
+      setNotice(
+        filling.is_active ? "Начинка скрыта." : "Начинка снова доступна."
+      );
     } catch (error) {
-      setNotice(`Не удалось изменить доступность: ${error.message}`);
+      // setNotice(`Не удалось изменить доступность: ${error.message}`);
     }
   }
-
 
   function resetOrderForm() {
     setSelectedFillings([]);
@@ -751,11 +750,14 @@ function App() {
     } catch { }
   }
 
-  const filteredOrders = orders.filter((order) => orderTabForStatus(order.status) === orderTab);
+  const filteredOrders = orders.filter(
+    (order) => orderTabForStatus(order.status) === orderTab
+  );
   const role = authUser?.role;
-  const visibleFillings = role === "admin"
-    ? fillings
-    : fillings.filter((filling) => filling.is_active !== false);
+  const visibleFillings =
+    role === "admin"
+      ? fillings
+      : fillings.filter((filling) => filling.is_active !== false);
   const imageFor = (filling) => filling.image_url || "/cake_header.jpg";
 
   async function changeOrderStatus(orderId, status, reason = "") {
@@ -765,7 +767,7 @@ function App() {
       setOrders((current) =>
         current.map((order) =>
           order.id === orderId
-            ? { ...order, status }
+            ? { ...order, status, declineReason: status === "cancelled" ? reason : order.declineReason }
             : order
         )
       );
@@ -773,9 +775,7 @@ function App() {
       setDeclineOrder(null);
       setDeclineReason("");
       setNotice(
-        status === "cancelled"
-          ? "Заказ отменён."
-          : "Статус заказа изменён."
+        status === "cancelled" ? "Заказ отменён." : "Статус заказа изменён."
       );
     } catch (error) {
       setNotice(`Не удалось изменить статус: ${error.message}`);
@@ -801,16 +801,26 @@ function App() {
 
             {loggedIn ? (
               <div className="account-actions">
-                <span className="account-email">{authUser?.role === "admin" ? "Администратор" : "Личный кабинет"}</span>
-                <button className="button button-light" onClick={() => handleLogout()}>
+                <span className="account-email">
+                  {authUser?.role === "admin"
+                    ? "Администратор"
+                    : "Личный кабинет"}
+                </span>
+                <button
+                  className="button button-light"
+                  onClick={() => handleLogout()}
+                >
                   <LogOut size={17} /> Выйти
                 </button>
               </div>
             ) : (
-              <button className="button button-light" onClick={() => {
-                setAuthMode("login");
-                setAuthOpen(true);
-              }}>
+              <button
+                className="button button-light"
+                onClick={() => {
+                  setAuthMode("login");
+                  setAuthOpen(true);
+                }}
+              >
                 <LogIn size={17} /> Войти
               </button>
             )}
@@ -862,6 +872,13 @@ function App() {
                     <strong>{order.decoration || "—"}</strong>
                   </div>
 
+                  {order.status === "cancelled" && (
+                    <div>
+                      <span className="order-muted">Причина отмены</span>
+                      <strong>{order.declineReason || "—"}</strong>
+                    </div>
+                  )}
+
                   {role === "admin" && (
                     <div className="order-photos-cell">
                       <span className="order-muted">Референсы</span>
@@ -897,7 +914,9 @@ function App() {
                       {formatPrice(order.price)}
                     </strong>
 
-                    <span className={`order-status-badge status-${order.status}`}>
+                    <span
+                      className={`order-status-badge status-${order.status}`}
+                    >
                       {orderStatusLabel(order.status)}
                     </span>
 
@@ -918,6 +937,7 @@ function App() {
                           changeOrderStatus(order.id, status);
                         }}
                       >
+                        <option value="accepted">Принят</option>
                         <option value="processing">В процессе</option>
                         <option value="ready">Готов</option>
                         <option value="cancelled">Отменён</option>
@@ -929,7 +949,6 @@ function App() {
             )}
           </div>
         </section>
-
 
         <section className="content-section filling-section" id="filling">
           <div className="section-heading">
@@ -944,9 +963,11 @@ function App() {
               </div>
             )}
 
-
             {role === "admin" && (
-              <button className="button button-light" onClick={() => setAddOpen(true)}>
+              <button
+                className="button button-light"
+                onClick={() => setAddOpen(true)}
+              >
                 <Plus size={17} /> Добавить начинку
               </button>
             )}
@@ -960,10 +981,13 @@ function App() {
                 <article
                   className={[
                     "filling-card",
-                    selectedFillings.some(
-                      (item) => item.id === filling.id) ? "selected" : "",
+                    selectedFillings.some((item) => item.id === filling.id)
+                      ? "selected"
+                      : "",
                     filling.is_active === false ? "inactive" : ""
-                  ].filter(Boolean).join(" ")}
+                  ]
+                    .filter(Boolean)
+                    .join(" ")}
                   key={filling.id}
                   role="button"
                   tabIndex={0}
@@ -983,19 +1007,33 @@ function App() {
                         event.currentTarget.src = "/cake_header.jpg";
                       }}
                     />
-
                   </div>
                   <div className="filling-info">
                     <strong>{filling.name}</strong>
                     <small>{filling.note}</small>
                     <b>{formatPrice(filling.price)} / кг</b>
                     {role === "admin" && (
-                      <div className="admin-filling-actions" onClick={(event) => event.stopPropagation()}>
-                        <button type="button" className="admin-mini-button" onClick={() => editFilling(filling)}>
+                      <div
+                        className="admin-filling-actions"
+                        onClick={(event) => event.stopPropagation()}
+                      >
+                        <button
+                          type="button"
+                          className="admin-mini-button"
+                          onClick={() => editFilling(filling)}
+                        >
                           <Pencil size={14} /> Редактировать
                         </button>
-                        <button type="button" className="admin-mini-button" onClick={() => toggleFilling(filling)}>
-                          {filling.is_active ? <EyeOff size={14} /> : <Eye size={14} />}
+                        <button
+                          type="button"
+                          className="admin-mini-button"
+                          onClick={() => toggleFilling(filling)}
+                        >
+                          {filling.is_active ? (
+                            <EyeOff size={14} />
+                          ) : (
+                            <Eye size={14} />
+                          )}
                           {filling.is_active ? "Скрыть" : "Вернуть"}
                         </button>
                       </div>
@@ -1028,8 +1066,8 @@ function App() {
                   <div>
                     <strong>Комбинация 50/50</strong>
                     <span>
-                      Обе начинки будут в одном торте. Вес каждой —
-                      {" "}{Number(weight) / 2} кг.
+                      Обе начинки будут в одном торте. Вес каждой —{" "}
+                      {Number(weight) / 2} кг.
                     </span>
                   </div>
                 </div>
@@ -1064,7 +1102,9 @@ function App() {
               </div>
 
               <div className="form-block">
-                <label htmlFor="address"><MapPin size={17} /> Адрес доставки</label>
+                <label htmlFor="address">
+                  <MapPin size={17} /> Адрес доставки
+                </label>
                 <input
                   id="address"
                   value={address}
@@ -1074,7 +1114,9 @@ function App() {
               </div>
 
               <div className="form-block">
-                <label htmlFor="references"><ImagePlus size={17} /> Референсы</label>
+                <label htmlFor="references">
+                  <ImagePlus size={17} /> Референсы
+                </label>
                 <label htmlFor="references" className="reference-upload">
                   <span className="reference-upload__icon">＋</span>
                   <span className="reference-upload__title">
@@ -1090,13 +1132,22 @@ function App() {
                   multiple
                   onChange={handlePhotosChange}
                 />
-                <small className="field-hint">Можно прикрепить от 0 до 3 фото.</small>
+                <small className="field-hint">
+                  Можно прикрепить от 0 до 3 фото.
+                </small>
                 {photos.length > 0 && (
                   <div className="reference-grid">
                     {photos.map((photo, index) => (
-                      <div className="reference-item" key={`${photo.name}-${index}`}>
+                      <div
+                        className="reference-item"
+                        key={`${photo.name}-${index}`}
+                      >
                         <img src={photo.dataUrl} alt={photo.name} />
-                        <button type="button" onClick={() => removePhoto(index)} aria-label="Удалить фото">
+                        <button
+                          type="button"
+                          onClick={() => removePhoto(index)}
+                          aria-label="Удалить фото"
+                        >
                           <X size={14} />
                         </button>
                       </div>
@@ -1191,15 +1242,11 @@ function App() {
           >
             <h2 id="decline-title">Причина отказа</h2>
 
-            <p>
-              Укажите причину отмены заказа №{declineOrder.id}.
-            </p>
+            <p>Укажите причину отмены заказа №{declineOrder.id}.</p>
 
             <textarea
               value={declineReason}
-              onChange={(event) =>
-                setDeclineReason(event.target.value)
-              }
+              onChange={(event) => setDeclineReason(event.target.value)}
               placeholder="Например: невозможно выполнить заказ в указанный срок"
               rows={4}
             />
@@ -1241,87 +1288,70 @@ function App() {
 
       <footer className="site-footer">
         <div className="footer-inner">
-
           <div className="footer-brand">
             <h3>Каприз — кондитерская, Москва</h3>
-            <p>
-              Свежие торты к вашему празднику
-            </p>
+            <p>Свежие торты к вашему празднику</p>
           </div>
 
           <div className="footer-column">
             <h4>Контакты</h4>
 
             <p>
-              <a href="tel:+79001209267">
-                +7 (900) 120-92-67
-              </a>
+              <a href="tel:+79001209267">+7 (900) 120-92-67</a>
             </p>
 
             <p>
-              <a href="mailto:info@kapriz.ru">
-                info@kapriz.ru
-              </a>
+              <a href="mailto:info@kapriz.ru">info@kapriz.ru</a>
             </p>
           </div>
 
           <div className="footer-column">
             <h4>Адрес</h4>
 
-            <p>
-              Москва, улица Тортиков, дом 1
-            </p>
+            <p>Москва, улица Тортиков, дом 1</p>
 
             <h4>Часы работы</h4>
 
-            <p>
-              ежедневно, 10:00 – 22:00
-            </p>
+            <p>ежедневно, 10:00 – 22:00</p>
           </div>
 
           <div className="footer-column footer-wide">
             <div className="footer-cancel-box">
-              <h4><Mail size={16} /> Хотите отменить заказ?</h4>
-              <p>Напишите нам на <a href="mailto:info@kapriz.ru">info@kapriz.ru</a>, указав номер заказа.</p>
+              <h4>
+                <Mail size={16} /> Хотите отменить заказ?
+              </h4>
+              <p>
+                Напишите нам на{" "}
+                <a href="mailto:info@kapriz.ru">info@kapriz.ru</a>, указав
+                номер заказа.
+              </p>
             </div>
             <h4>Информация</h4>
 
             <p className="footer-links">
-              <a href="#">
-                Политика конфиденциальности
-              </a>
+              <a href="#">Политика конфиденциальности</a>
 
               <span> · </span>
 
-              <a href="#">
-                Согласие на обработку ПД
-              </a>
+              <a href="#">Согласие на обработку ПД</a>
             </p>
 
             <p className="allergens">
-              <strong>Аллергены:</strong>{" "}
-              продукция может содержать следы
-              глютена, молока, яиц, орехов, сои,
-              кунжута и какао. Состав указан
-              в карточках товаров.
+              <strong>Аллергены:</strong> продукция может содержать следы
+              глютена, молока, яиц, орехов, сои, кунжута и какао. Состав
+              указан в карточках товаров.
             </p>
 
             <p className="allergy-warning">
-              При аллергии сообщите нам до
-              оформления заказа.
+              При аллергии сообщите нам до оформления заказа.
             </p>
           </div>
-
         </div>
 
         <div className="footer-bottom">
-          <span>
-            ООО «Каприз», ИНН 7727676767, Москва
-          </span>
+          <span>ООО «Каприз», ИНН 7727676767, Москва</span>
 
-          <span>
-            © 2025 Каприз. Все права защищены.
-          </span>
+          <span>© 2025 Каприз. Все права защищены.</span>
         </div>
       </footer>
 
@@ -1329,13 +1359,17 @@ function App() {
         <div className="toast toast-visible">
           <Check size={18} />
           <span>{notice}</span>
-          <button onClick={() => setNotice("")}><X size={17} /></button>
+          <button onClick={() => setNotice("")}>
+            <X size={17} />
+          </button>
         </div>
       )}
 
       {authOpen && (
         <Modal
-          title={authMode === "login" ? "Войти в личный кабинет" : "Создать аккаунт"}
+          title={
+            authMode === "login" ? "Войти в личный кабинет" : "Создать аккаунт"
+          }
           onClose={() => setAuthOpen(false)}
         >
           <div className="auth-switch">
@@ -1354,14 +1388,44 @@ function App() {
           </div>
 
           <form onSubmit={submitAuth}>
-            <label className="modal-label" htmlFor="email">Email</label>
-            <input className="modal-input" id="email" name="email" type="email" autoComplete="email" placeholder="you@example.com" required />
+            <label className="modal-label" htmlFor="email">
+              Email
+            </label>
+            <input
+              className="modal-input"
+              id="email"
+              name="email"
+              type="email"
+              autoComplete="email"
+              placeholder="you@example.com"
+              required
+            />
 
-            <label className="modal-label" htmlFor="password">Пароль</label>
-            <input className="modal-input" id="password" name="password" type="password" minLength="3" autoComplete={authMode === "login" ? "current-password" : "new-password"} placeholder="Минимум 3 символа" required />
+            <label className="modal-label" htmlFor="password">
+              Пароль
+            </label>
+            <input
+              className="modal-input"
+              id="password"
+              name="password"
+              type="password"
+              minLength="3"
+              autoComplete={
+                authMode === "login" ? "current-password" : "new-password"
+              }
+              placeholder="Минимум 3 символа"
+              required
+            />
 
-            <button className="button button-accent modal-submit" disabled={authLoading}>
-              {authLoading ? "Подождите…" : authMode === "login" ? "Войти" : "Зарегистрироваться"}
+            <button
+              className="button button-accent modal-submit"
+              disabled={authLoading}
+            >
+              {authLoading
+                ? "Подождите…"
+                : authMode === "login"
+                  ? "Войти"
+                  : "Зарегистрироваться"}
             </button>
           </form>
         </Modal>
@@ -1382,9 +1446,7 @@ function App() {
                 Заказ <strong>#{paymentOrderId}</strong> создан.
               </p>
 
-              <p>
-                Это тестовая оплата. Деньги реально не списываются.
-              </p>
+              <p>Это тестовая оплата. Деньги реально не списываются.</p>
 
               <button
                 className="button button-accent modal-submit"
@@ -1396,9 +1458,7 @@ function App() {
             </>
           ) : (
             <>
-              <p>
-                Спасибо за заказ!
-              </p>
+              <p>Спасибо за заказ!</p>
 
               <p>
                 Номер заказа: <strong>#{paymentOrderId}</strong>
@@ -1418,18 +1478,54 @@ function App() {
       {addOpen && (
         <Modal title="Добавить начинку" onClose={() => setAddOpen(false)}>
           <form onSubmit={addFilling}>
-            <label className="modal-label" htmlFor="filling-name">Название</label>
-            <input className="modal-input" id="filling-name" name="name" placeholder="Фисташка" required />
+            <label className="modal-label" htmlFor="filling-name">
+              Название
+            </label>
+            <input
+              className="modal-input"
+              id="filling-name"
+              name="name"
+              placeholder="Фисташка"
+              required
+            />
 
-            <label className="modal-label" htmlFor="filling-description">Описание</label>
-            <input className="modal-input" id="filling-description" name="description" placeholder="Фисташковый крем" />
+            <label className="modal-label" htmlFor="filling-description">
+              Описание
+            </label>
+            <input
+              className="modal-input"
+              id="filling-description"
+              name="description"
+              placeholder="Фисташковый крем"
+            />
 
-            <label className="modal-label" htmlFor="filling-price">Цена за кг</label>
-            <input className="modal-input" id="filling-price" name="price" type="number" min="0" placeholder="1400" required />
+            <label className="modal-label" htmlFor="filling-price">
+              Цена за кг
+            </label>
+            <input
+              className="modal-input"
+              id="filling-price"
+              name="price"
+              type="number"
+              min="0"
+              placeholder="1400"
+              required
+            />
 
-            <label className="modal-label" htmlFor="filling-image">Изображение (PNG)</label>
-            <input className="modal-file" id="filling-image" name="image" type="file" accept="image/png" required />
-            <button className="button button-accent modal-submit">Добавить на сервер</button>
+            <label className="modal-label" htmlFor="filling-image">
+              Изображение (PNG)
+            </label>
+            <input
+              className="modal-file"
+              id="filling-image"
+              name="image"
+              type="file"
+              accept="image/png"
+              required
+            />
+            <button className="button button-accent modal-submit">
+              Добавить на сервер
+            </button>
           </form>
         </Modal>
       )}
@@ -1441,7 +1537,9 @@ function Modal({ title, children, onClose }) {
   return (
     <div className="modal-backdrop" onMouseDown={onClose}>
       <div className="modal" onMouseDown={(e) => e.stopPropagation()}>
-        <button className="modal-close" onClick={onClose}><X size={20} /></button>
+        <button className="modal-close" onClick={onClose}>
+          <X size={20} />
+        </button>
         <h3>{title}</h3>
         {children}
       </div>
