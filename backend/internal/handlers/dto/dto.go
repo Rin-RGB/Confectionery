@@ -94,6 +94,7 @@ type OrderResponse struct {
 	TotalPrice       float64                `json:"total_price" minimum:"0"`
 	Status           domain.OrderStatus     `json:"status" enums:"accepted,processing,ready,cancelled"`
 	ReferencePhotos  []string               `json:"reference_photos"`
+	DeclineReason    string                 `json:"decline_reason"`
 	CreatedAt        time.Time              `json:"created_at"`
 	UpdatedAt        time.Time              `json:"updated_at"`
 }

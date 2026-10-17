@@ -109,5 +109,6 @@ func OrderResponseFromDomain(order domain.Order) OrderResponse {
 		ReferencePhotos:  order.ReferencePhotos,
 		CreatedAt:        order.CreatedAt,
 		UpdatedAt:        order.UpdatedAt,
+		DeclineReason:    order.DeclineReason,
 	}
 }
