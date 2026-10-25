@@ -718,7 +718,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Доступно только администратору.",
+                "description": "Пользователь может получить фотографию только собственного заказа. Администратор может получить фотографию любого заказа.",
                 "produces": [
                     "image/jpeg",
                     "image/png",
@@ -1120,6 +1120,9 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "created_at": {
+                    "type": "string"
+                },
+                "decline_reason": {
                     "type": "string"
                 },
                 "decoration_wishes": {

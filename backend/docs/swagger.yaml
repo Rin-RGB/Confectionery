@@ -89,6 +89,8 @@ definitions:
     properties:
       created_at:
         type: string
+      decline_reason:
+        type: string
       decoration_wishes:
         type: string
       delivery_address:
@@ -630,7 +632,8 @@ paths:
       - orders
   /api/v1/orders/{orderId}/photos/{fileName}:
     get:
-      description: Доступно только администратору.
+      description: Пользователь может получить фотографию только собственного заказа.
+        Администратор может получить фотографию любого заказа.
       parameters:
       - description: UUID заказа
         format: uuid

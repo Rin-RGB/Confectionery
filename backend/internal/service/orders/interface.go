@@ -11,6 +11,7 @@ type orderRepository interface {
 	CreateOrderFillings(ctx context.Context, orderID string, fillings []domain.OrderFilling) error
 	CreateOrderPhotos(ctx context.Context, orderID string, photoNames []string) error
 	GetOrderPhotoNames(ctx context.Context, orderID string) ([]string, error)
+	GetOrderPhotoOwnerID(ctx context.Context, orderID, photoName string) (string, error)
 	GetOrderByID(ctx context.Context, orderID string) (domain.Order, error)
 	GetOrderFillings(ctx context.Context, orderID string) ([]domain.OrderFilling, error)
 	GetOrdersByUser(ctx context.Context, userID string) ([]domain.Order, error)

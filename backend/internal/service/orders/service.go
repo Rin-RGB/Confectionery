@@ -233,6 +233,25 @@ func (s *Service) GetMyOrders(ctx context.Context, userID string) ([]domain.Orde
 }
 
 func (s *Service) GetOrderByID(ctx context.Context, userID, orderID string) (domain.Order, error) {
+	order, err := s.getAuthorizedOrder(ctx, userID, orderID)
+	if err != nil {
+		return domain.Order{}, err
+	}
+
+	fillings, err := s.orders.GetOrderFillings(ctx, orderID)
+	if err != nil {
+		return domain.Order{}, fmt.Errorf("get order fillings: %w", err)
+	}
+	order.Fillings = fillings
+	order.ReferencePhotos, err = s.orders.GetOrderPhotoNames(ctx, orderID)
+	if err != nil {
+		return domain.Order{}, fmt.Errorf("get order photo names: %w", err)
+	}
+
+	return order, nil
+}
+
+func (s *Service) getAuthorizedOrder(ctx context.Context, userID, orderID string) (domain.Order, error) {
 	if _, err := uuid.Parse(userID); err != nil {
 		return domain.Order{}, fmt.Errorf("invalid user id: %w", coreerrors.ErrInvalidRequest)
 	}
@@ -255,20 +274,13 @@ func (s *Service) GetOrderByID(ctx context.Context, userID, orderID string) (dom
 		}
 	}
 
-	fillings, err := s.orders.GetOrderFillings(ctx, orderID)
-	if err != nil {
-		return domain.Order{}, fmt.Errorf("get order fillings: %w", err)
-	}
-	order.Fillings = fillings
-	order.ReferencePhotos, err = s.orders.GetOrderPhotoNames(ctx, orderID)
-	if err != nil {
-		return domain.Order{}, fmt.Errorf("get order photo names: %w", err)
-	}
-
 	return order, nil
 }
 
-func (s *Service) GetOrderPhoto(ctx context.Context, orderID, photoName string) (string, error) {
+func (s *Service) GetOrderPhoto(ctx context.Context, userID, orderID, photoName string) (string, error) {
+	if _, err := uuid.Parse(userID); err != nil {
+		return "", fmt.Errorf("invalid user id: %w", coreerrors.ErrInvalidRequest)
+	}
 	if _, err := uuid.Parse(orderID); err != nil {
 		return "", fmt.Errorf("invalid order id: %w", coreerrors.ErrInvalidRequest)
 	}
@@ -277,23 +289,16 @@ func (s *Service) GetOrderPhoto(ctx context.Context, orderID, photoName string) 
 		return "", fmt.Errorf("invalid order photo name: %w", coreerrors.ErrInvalidRequest)
 	}
 
-	if _, err := s.orders.GetOrderByID(ctx, orderID); err != nil {
-		return "", fmt.Errorf("get order: %w", err)
-	}
-	photoNames, err := s.orders.GetOrderPhotoNames(ctx, orderID)
+	ownerID, err := s.orders.GetOrderPhotoOwnerID(ctx, orderID, photoName)
 	if err != nil {
-		return "", fmt.Errorf("get order photo names: %w", err)
+		return "", fmt.Errorf("get order photo owner: %w", err)
 	}
-
-	belongsToOrder := false
-	for _, savedPhotoName := range photoNames {
-		if savedPhotoName == photoName {
-			belongsToOrder = true
-			break
-		}
+	userRole, err := core_middleware.GetRoleFromCtx(ctx)
+	if err != nil {
+		return "", fmt.Errorf("failed to get user role: %w", err)
 	}
-	if !belongsToOrder {
-		return "", coreerrors.ErrOrderPhotoNotFound
+	if userRole != domain.RoleAdmin && ownerID != userID {
+		return "", fmt.Errorf("this is not your order photo: %w", coreerrors.ErrForbidden)
 	}
 
 	photoPath := filepath.Join(tempPhotoDirectory, photoName)

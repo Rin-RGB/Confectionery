@@ -35,13 +35,14 @@ func NewHandler(service orderService, provider core_middleware.Parser, validator
 func (h *Handler) Routes() []core_server.Route {
 	userOnly := []core_middleware.Middleware{core_middleware.Auth(h.provider, domain.RoleUser)}
 	adminOnly := []core_middleware.Middleware{core_middleware.Auth(h.provider, domain.RoleAdmin)}
+	userOrAdmin := []core_middleware.Middleware{core_middleware.Auth(h.provider, domain.RoleUser, domain.RoleAdmin)}
 	return []core_server.Route{
 		{Method: http.MethodPost, Path: "/orders/price", Handler: h.CalculatePrice},
 		{Method: http.MethodPost, Path: "/orders", Handler: h.CreateOrder, Middlewares: userOnly},
 		{Method: http.MethodGet, Path: "/orders/my", Handler: h.GetMyOrders, Middlewares: userOnly},
-		{Method: http.MethodGet, Path: "/orders/{orderId}", Handler: h.GetOrder, Middlewares: []core_middleware.Middleware{core_middleware.Auth(h.provider, domain.RoleUser, domain.RoleAdmin)}},
+		{Method: http.MethodGet, Path: "/orders/{orderId}", Handler: h.GetOrder, Middlewares: userOrAdmin},
 		{Method: http.MethodGet, Path: "/orders", Handler: h.GetOrders, Middlewares: adminOnly},
-		{Method: http.MethodGet, Path: "/orders/{orderId}/photos/{fileName}", Handler: h.GetOrderPhoto, Middlewares: adminOnly},
+		{Method: http.MethodGet, Path: "/orders/{orderId}/photos/{fileName}", Handler: h.GetOrderPhoto, Middlewares: userOrAdmin},
 		{Method: http.MethodPatch, Path: "/orders/{orderId}/status", Handler: h.UpdateOrderStatus, Middlewares: adminOnly},
 	}
 }
@@ -252,7 +253,7 @@ func (h *Handler) GetOrder(writer *core_response.Writer, request *http.Request) 
 
 // GetOrderPhoto возвращает фотографию-референс заказа.
 // @Summary Получение фотографии заказа
-// @Description Доступно только администратору.
+// @Description Пользователь может получить фотографию только собственного заказа. Администратор может получить фотографию любого заказа.
 // @Tags orders
 // @Produce image/jpeg,image/png,image/gif,image/webp
 // @Security BearerAuth
@@ -266,8 +267,15 @@ func (h *Handler) GetOrder(writer *core_response.Writer, request *http.Request) 
 // @Failure 500 {object} core_response.ErrorResponse
 // @Router /api/v1/orders/{orderId}/photos/{fileName} [get]
 func (h *Handler) GetOrderPhoto(writer *core_response.Writer, request *http.Request) {
+	userID, err := core_middleware.GetUserIdFromCtx(request.Context())
+	if err != nil {
+		writer.ErrorResponse(err)
+		return
+	}
+
 	photoPath, err := h.service.GetOrderPhoto(
 		request.Context(),
+		userID.String(),
 		request.PathValue("orderId"),
 		request.PathValue("fileName"),
 	)

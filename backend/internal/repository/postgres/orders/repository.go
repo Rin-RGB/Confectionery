@@ -182,6 +182,32 @@ func (r *Repository) GetOrderPhotoNames(ctx context.Context, orderID string) ([]
 	return photoNames, nil
 }
 
+func (r *Repository) GetOrderPhotoOwnerID(ctx context.Context, orderID, photoName string) (string, error) {
+	queryContext, cancel := context.WithTimeout(ctx, r.txManager.GetTimeout())
+	defer cancel()
+
+	const query = `
+		SELECT orders.user_id
+		FROM order_photos
+		JOIN orders ON orders.id = order_photos.order_id
+		WHERE order_photos.order_id = $1 AND order_photos.photo_name = $2
+	`
+	var ownerID string
+	if err := r.txManager.GetExecutor(queryContext).QueryRow(
+		queryContext,
+		query,
+		orderID,
+		photoName,
+	).Scan(&ownerID); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return "", coreerrors.ErrOrderPhotoNotFound
+		}
+		return "", fmt.Errorf("select order photo owner: %w", err)
+	}
+
+	return ownerID, nil
+}
+
 func (r *Repository) GetOrderByID(ctx context.Context, orderID string) (domain.Order, error) {
 	queryContext, cancel := context.WithTimeout(ctx, r.txManager.GetTimeout())
 	defer cancel()
