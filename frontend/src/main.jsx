@@ -375,19 +375,19 @@ function App() {
     try {
       const response = await api.getFillings();
       const serverFillings = normalizeFillings(response);
-      const cached = readLocalJson(FILLINGS_CACHE_KEY, []);
-      const byId = new Map(cached.map((item) => [String(item.id), item]));
 
-      serverFillings.forEach((item) => byId.set(String(item.id), item));
-      const merged = Array.from(byId.values());
+      setFillings(serverFillings);
 
-      setFillings(merged);
       try {
-        localStorage.setItem(FILLINGS_CACHE_KEY, JSON.stringify(merged));
+        localStorage.setItem(
+          FILLINGS_CACHE_KEY,
+          JSON.stringify(serverFillings)
+        );
       } catch {}
     } catch (error) {
       const cached = readLocalJson(FILLINGS_CACHE_KEY, []);
       setFillings(cached);
+
       if (!cached.length) {
         setNotice(`Не удалось загрузить начинки: ${error.message}`);
       }
@@ -747,6 +747,22 @@ function App() {
 
   const filteredOrders = orders.filter((order) => orderTabForStatus(order.status) === orderTab);
   const role = authUser?.role;
+
+  
+  useEffect(() => {
+    if (role !== "admin") return;
+
+    setSelectedFillings([]);
+
+    try {
+      const draft = readLocalJson(DRAFT_KEY, {});
+      delete draft.selectedFilling;
+      delete draft.selectedFillings;
+      localStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
+    } catch {}
+  }, [role]);
+
+
   const visibleFillings = role === "admin"
     ? fillings
     : fillings.filter((filling) => filling.is_active !== false);
@@ -898,9 +914,11 @@ function App() {
                         {formatPrice(order.price)}
                       </strong>
 
-                      <span className={`order-status-badge status-${order.status}`}>
-                        {orderStatusLabel(order.status)}
-                      </span>
+                      {role === "user" && (
+                        <span className={`order-status-badge status-${order.status}`}>
+                          {orderStatusLabel(order.status)}
+                        </span>
+                      )}
 
                       {role === "admin" && (
                         <select

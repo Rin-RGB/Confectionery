@@ -954,10 +954,30 @@ textarea::placeholder, input::placeholder { color: rgba(48,26,6,.38); }
   transform: translateY(-4px);
 }
 
+
 .filling-card.selected {
-  box-shadow: 0 20px 42px rgba(48, 26, 6, .16);
-  border-color: rgba(154, 0, 2, .12);
+  box-shadow: 0 16px 32px rgba(154, 0, 2, .20);
+  border-color: var(--accent);
 }
+
+.filling-card.selected::before {
+  /*content: "✓";*/
+  position: absolute;
+  z-index: 2;
+  top: 12px;
+  left: 12px;
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  color: var(--white);
+  background: var(--accent);
+  border-radius: 50%;
+  font-size: 19px;
+  font-weight: 700;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, .18);
+}
+
 
 .filling-card.selected:hover {
   box-shadow: 0 23px 48px rgba(48, 26, 6, .19);
