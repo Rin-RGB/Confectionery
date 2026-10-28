@@ -198,6 +198,7 @@ function normalizeOrders(payload) {
       id: item.id,
       date: item.created_at,
       filling: fillings.length ? fillings.map((f) => f.name).filter(Boolean).join(", ") : "—",
+      fillings: fillings,
       weight: Number(item.weight_grams ?? 0) / 1000,
       price: Number(item.total_price ?? 0),
       status: item.status ?? "accepted",
@@ -286,6 +287,7 @@ function App() {
   const [address, setAddress] = useState(SAVED_DRAFT.address || "");
   const [photos, setPhotos] = useState(SAVED_DRAFT.photos || []);
   const [orders, setOrders] = useState([]);
+  const [selectedOrder, setSelectedOrder] = useState(null);
   const [orderTab, setOrderTab] = useState("processing");
   const [ordersOpen, setOrdersOpen] = useState(false);
   const [authOpen, setAuthOpen] = useState(false);
@@ -301,6 +303,14 @@ function App() {
   const [paymentLoading, setPaymentLoading] = useState(false);
   const [paymentSuccess, setPaymentSuccess] = useState(false);
   const [paymentOrderId, setPaymentOrderId] = useState("");
+
+  const [fillingModalMode, setFillingModalMode] = useState("create");
+  const [editingFilling, setEditingFilling] = useState(null);
+  const [fillingForm, setFillingForm] = useState({
+    name: "",
+    description: "",
+    price: ""
+  });
   const [authUser, setAuthUser] = useState(() => {
     const token = authStorage.getAccess();
     return token ? decodeJwt(token) : null;
@@ -658,50 +668,69 @@ function App() {
     }
   }
 
-  async function editFilling(filling) {
-    const name = window.prompt("Название начинки:", filling.name);
-    if (name === null) return;
+  
+  function editFilling(filling) {
+    setFillingModalMode("edit");
+    setEditingFilling(filling);
+    setFillingForm({
+      name: filling.name || "",
+      description: filling.note || "",
+      price: String(filling.price ?? "")
+    });
+    setAddOpen(true);
+  }
 
-    const description = window.prompt("Описание:", filling.note || "");
-    if (description === null) return;
 
-    const priceText = window.prompt("Цена за кг:", String(filling.price));
-    if (priceText === null) return;
+  async function saveEditedFilling(event) {
+    event.preventDefault();
 
-    const price = Number(priceText);
-    if (!name.trim() || !Number.isFinite(price) || price <= 0) {
+    if (!editingFilling) return;
+
+    const name = fillingForm.name.trim();
+    const description = fillingForm.description.trim();
+    const price = Number(fillingForm.price);
+
+    if (!name || !Number.isFinite(price) || price <= 0) {
       setNotice("Проверьте название и цену.");
       return;
     }
 
     try {
-      const updated = await api.updateFilling(filling.id, {
-        name: name.trim(),
-        description: description.trim(),
+      const updated = await api.updateFilling(editingFilling.id, {
+        name,
+        description,
         price
       });
 
       const normalized = normalizeFillings([updated])[0] || {
-        ...filling,
-        name: name.trim(),
-        note: description.trim(),
+        ...editingFilling,
+        name,
+        note: description,
         price
       };
 
       setFillings((current) => {
         const next = current.map((item) =>
-          item.id === filling.id ? { ...item, ...normalized, is_active: filling.is_active } : item
+          item.id === editingFilling.id
+            ? { ...item, ...normalized, is_active: editingFilling.is_active }
+            : item
         );
+
         try {
           localStorage.setItem(FILLINGS_CACHE_KEY, JSON.stringify(next));
         } catch {}
+
         return next;
       });
+
+      setAddOpen(false);
+      setEditingFilling(null);
       setNotice("Начинка обновлена.");
     } catch (error) {
       setNotice(`Не удалось изменить начинку: ${error.message}`);
     }
   }
+
 
   async function toggleFilling(filling) {
     try {
@@ -851,7 +880,11 @@ function App() {
                 <div className="empty-state">Здесь пока нет заказов.</div>
               ) : (
                 filteredOrders.map((order) => (
-                  <article className="order-row" key={order.id}>
+                  <article
+                    className="order-row order-row-clickable"
+                    key={order.id}
+                    onClick={() => setSelectedOrder(order)}
+                  >
                     <div className="order-id">
                       <span>Заказ</span>
                       <strong>{order.id}</strong>
@@ -862,47 +895,12 @@ function App() {
                       <strong>{formatOrderDate(order.date)}</strong>
                     </div>
 
-                    <div>
-                      <span className="order-muted">Начинка</span>
-                      <strong>{order.filling}</strong>
-                    </div>
-
-                    <div>
-                      <span className="order-muted">Пожелания</span>
-                      <strong>{order.decoration || "—"}</strong>
-                    </div>
-
                     {order.status === "cancelled" && (
                       <div>
                         <span className="order-muted">Причина отмены</span>
                         <strong>{order.declineReason}</strong>
                       </div>
                     )}
-
-                    {role === "admin" && (
-                      <div className="order-photos-cell">
-                        <span className="order-muted">Референсы</span>
-                        {order.referencePhotos?.length ? (
-                          <div className="order-photo-list">
-                            {order.referencePhotos.map((fileName) => (
-                              <OrderPhotoThumbnail
-                                key={fileName}
-                                orderId={order.id}
-                                fileName={fileName}
-                                onOpen={setPreviewPhoto}
-                              />
-                            ))}
-                          </div>
-                        ) : (
-                          <strong>—</strong>
-                        )}
-                      </div>
-                    )}
-
-                    <div>
-                      <span className="order-muted">Вес</span>
-                      <strong>{order.weight} кг</strong>
-                    </div>
 
                     <div>
                       <span className="order-muted">Адрес</span>
@@ -923,6 +921,7 @@ function App() {
                       {role === "admin" && (
                         <select
                           className="order-status-select"
+                          onClick={(event) => event.stopPropagation()}
                           value={order.status}
                           onChange={(event) => {
                             const status = event.target.value;
@@ -1201,6 +1200,76 @@ function App() {
         )}
       </main>
 
+      {selectedOrder && (
+        <Modal
+          title={`Заказ №${selectedOrder.id}`}
+          onClose={() => setSelectedOrder(null)}
+        >
+          <div className="order-details-modal">
+            <div className="order-details-item">
+              <span className="order-muted">Дата</span>
+              <strong>{formatOrderDate(selectedOrder.date)}</strong>
+            </div>
+
+            <div className="order-details-item">
+              <span className="order-muted">Адрес доставки</span>
+              <strong>{selectedOrder.address || "—"}</strong>
+            </div>
+
+            <div className="order-details-item">
+              <span className="order-muted">Статус</span>
+              <strong>{orderStatusLabel(selectedOrder.status)}</strong>
+            </div>
+
+            <div className="order-details-item">
+              <span className="order-muted">Начинки</span>
+              <strong>{selectedOrder.filling || "—"}</strong>
+            </div>
+
+            <div className="order-details-item">
+              <span className="order-muted">Вес</span>
+              <strong>{selectedOrder.weight} кг</strong>
+            </div>
+
+            <div className="order-details-item">
+              <span className="order-muted">Стоимость</span>
+              <strong>{formatPrice(selectedOrder.price)}</strong>
+            </div>
+
+            <div className="order-details-item">
+              <span className="order-muted">Пожелания к оформлению</span>
+              <p>{selectedOrder.decoration || "Нет пожеланий"}</p>
+            </div>
+
+            {selectedOrder.status === "cancelled" && (
+              <div className="order-details-item">
+                <span className="order-muted">Причина отмены</span>
+                <p>{selectedOrder.declineReason || "Не указана"}</p>
+              </div>
+            )}
+
+            <div className="order-details-item">
+              <span className="order-muted">Фото-референсы</span>
+
+              {selectedOrder.referencePhotos?.length ? (
+                <div className="order-photo-list">
+                  {selectedOrder.referencePhotos.map((fileName) => (
+                    <OrderPhotoThumbnail
+                      key={fileName}
+                      orderId={selectedOrder.id}
+                      fileName={fileName}
+                      onOpen={setPreviewPhoto}
+                    />
+                  ))}
+                </div>
+              ) : (
+                <p>Референсы не прикреплены</p>
+              )}
+            </div>
+          </div>
+        </Modal>
+      )}
+
       {declineOrder && (
         <div className="modal-backdrop">
           <div
@@ -1436,20 +1505,101 @@ function App() {
       )}
 
       {addOpen && (
-        <Modal title="Добавить начинку" onClose={() => setAddOpen(false)}>
-          <form onSubmit={addFilling}>
-            <label className="modal-label" htmlFor="filling-name">Название</label>
-            <input className="modal-input" id="filling-name" name="name" placeholder="Фисташка" required />
+        <Modal
+          title={fillingModalMode === "edit" ? "Редактировать начинку" : "Добавить начинку"}
+          onClose={() => setAddOpen(false)}
+        >
+          <form onSubmit={fillingModalMode === "edit" ? saveEditedFilling : addFilling}>
+            
+            
+              <label className="modal-label" htmlFor="filling-name">
+                Название начинки
+              </label>
+              <input
+                id="filling-name"
+                className="filling-form-input"
+                name="name"
+                placeholder="Например, Фисташка с малиной"
+                value={fillingForm.name}
+                onChange={(event) =>
+                  setFillingForm((current) => ({
+                    ...current,
+                    name: event.target.value
+                  }))
+                }
+                required
+              />
 
-            <label className="modal-label" htmlFor="filling-description">Описание</label>
-            <input className="modal-input" id="filling-description" name="description" placeholder="Фисташковый крем" />
+              <label className="modal-label" htmlFor="filling-description">
+                Описание
+              </label>
+              <textarea
+                id="filling-description"
+                className="filling-form-input filling-form-textarea"
+                name="description"
+                placeholder="Расскажите о составе и вкусе начинки"
+                value={fillingForm.description}
+                onChange={(event) =>
+                  setFillingForm((current) => ({
+                    ...current,
+                    description: event.target.value
+                  }))
+                }
+              />
 
-            <label className="modal-label" htmlFor="filling-price">Цена за кг</label>
-            <input className="modal-input" id="filling-price" name="price" type="number" min="0" placeholder="1400" required />
+              <label className="modal-label" htmlFor="filling-price">
+                Цена, ₽
+              </label>
+              <input
+                id="filling-price"
+                className="filling-form-input"
+                name="price"
+                type="number"
+                min="1"
+                placeholder="1400"
+                value={fillingForm.price}
+                onChange={(event) =>
+                  setFillingForm((current) => ({
+                    ...current,
+                    price: event.target.value
+                  }))
+                }
+                required
+              />
+
+            
+            <label htmlFor="filling-image" className="reference-upload">
+              <span className="reference-upload__icon">＋</span>
+              <span className="reference-upload__title">
+                {fillingModalMode === "edit"
+                  ? "Заменить изображение"
+                  : "Выбрать изображение"}
+              </span>
+              <span className="reference-upload__hint">Формат PNG</span>
+            </label>
+
+            <input
+              id="filling-image"
+              className="reference-input"
+              name="image"
+              type="file"
+              accept="image/png"
+              required={fillingModalMode === "create"}
+              hidden
+            />
 
             <label className="modal-label" htmlFor="filling-image">Изображение (PNG)</label>
-            <input className="modal-file" id="filling-image" name="image" type="file" accept="image/png" required />
-            <button className="button button-accent modal-submit">Добавить на сервер</button>
+            <input
+              className="modal-file"
+              id="filling-image"
+              name="image"
+              type="file"
+              accept="image/png"
+              required={fillingModalMode === "create"}
+            />
+            <button className="button button-accent modal-submit">
+              {fillingModalMode === "edit" ? "Сохранить изменения" : "Добавить на сервер"}
+            </button>
           </form>
         </Modal>
       )}
