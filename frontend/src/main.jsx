@@ -278,7 +278,10 @@ function OrderPhotoThumbnail({ orderId, fileName, onOpen }) {
 
 function App() {
   const [fillings, setFillings] = useState(SAVED_FILLINGS);
-  const [selectedFillings, setSelectedFillings] = useState(SAVED_DRAFT.selectedFilling ? [SAVED_DRAFT.selectedFilling] : []);
+  const [selectedFillings, setSelectedFillings] = useState(
+    SAVED_DRAFT.selectedFillings ??
+    (SAVED_DRAFT.selectedFilling ? [SAVED_DRAFT.selectedFilling] : [])
+  );
   const [weight, setWeight] = useState(Number(SAVED_DRAFT.weight) || 1);
   const [serverPrice, setServerPrice] = useState(null);
   const [priceLoading, setPriceLoading] = useState(false);
@@ -329,7 +332,7 @@ function App() {
       localStorage.setItem(
         DRAFT_KEY,
         JSON.stringify({
-          selectedFilling,
+          selectedFillings,
           weight,
           design,
           noDesign,
@@ -465,7 +468,7 @@ function App() {
       setNotice(authMode === "register" ? "Регистрация выполнена." : "Вы вошли в аккаунт.");
       await loadOrders();
     } catch (error) {
-      setNotice(error.message);
+      setNotice("Пользователь не найден. Проверьте почту или пароль.");
     } finally {
       setAuthLoading(false);
     }
