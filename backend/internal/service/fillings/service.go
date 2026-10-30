@@ -29,10 +29,10 @@ func NewService(fillingsRepo fillingRepository, txManager txManager, imagesDirec
 	}
 }
 
-func (s *Service) GetFillings(ctx context.Context) ([]domain.Filling, error) {
-	fillings, err := s.fillingsRepo.GetFillings(ctx, true)
+func (s *Service) GetFillings(ctx context.Context, onlyActive bool) ([]domain.Filling, error) {
+	fillings, err := s.fillingsRepo.GetFillings(ctx, onlyActive)
 	if err != nil {
-		return nil, fmt.Errorf("list active fillings: %w", err)
+		return nil, fmt.Errorf("list fillings: %w", err)
 	}
 
 	return fillings, nil

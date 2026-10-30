@@ -39,7 +39,7 @@ services:
       POSTGRES_HOST: postgres
       LOGGER_FOLDER: /var/log/confectionery
       STATIC_FILES_FOLDER: /var/lib/confectionery/static
-    container_name: confectionery_app
+    container_name: confectionery_appв
     ports:
       - "8080:8080"
     depends_on:

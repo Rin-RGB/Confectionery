@@ -7,7 +7,9 @@ import (
 	"io"
 	"net/http"
 	"strconv"
+	"strings"
 
+	"SPOproject/internal/core/auth"
 	"SPOproject/internal/core/domain"
 	coreerrors "SPOproject/internal/core/errors"
 	"SPOproject/internal/core/http/middleware"
@@ -43,15 +45,29 @@ func (h *Handler) Routes() []core_server.Route {
 	}
 }
 
-// GetFillings возвращает список активных начинок.
-// @Summary Получение активных начинок
+// GetFillings возвращает начинки с учётом роли пользователя.
+// @Summary Получение начинок
+// @Description Без токена и с токеном пользователя возвращаются только активные начинки. С действительным Bearer-токеном администратора возвращаются все начинки. Переданный токен проверяется.
 // @Tags fillings
 // @Produce json
 // @Success 200 {array} dto.FillingResponse
+// @Failure 400 {object} core_response.ErrorResponse
+// @Failure 401 {object} core_response.ErrorResponse
 // @Failure 500 {object} core_response.ErrorResponse
 // @Router /api/v1/fillings [get]
 func (h *Handler) GetFillings(writer *core_response.Writer, request *http.Request) {
-	fillings, err := h.service.GetFillings(request.Context())
+	onlyActive := true
+	token := strings.TrimSpace(strings.TrimPrefix(request.Header.Get("Authorization"), "Bearer "))
+	if token != "" {
+		claims, err := h.provider.ParseToken(token, auth.AccessType)
+		if err != nil {
+			writer.ErrorResponse(err)
+			return
+		}
+		onlyActive = claims.Role != domain.RoleAdmin
+	}
+
+	fillings, err := h.service.GetFillings(request.Context(), onlyActive)
 	if err != nil {
 		writer.ErrorResponse(err)
 		return

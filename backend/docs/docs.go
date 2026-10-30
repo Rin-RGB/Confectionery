@@ -17,13 +17,14 @@ const docTemplate = `{
     "paths": {
         "/api/v1/fillings": {
             "get": {
+                "description": "Без токена и с токеном пользователя возвращаются только активные начинки. С действительным Bearer-токеном администратора возвращаются все начинки. Переданный токен проверяется.",
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
                     "fillings"
                 ],
-                "summary": "Получение активных начинок",
+                "summary": "Получение начинок",
                 "responses": {
                     "200": {
                         "description": "OK",
@@ -32,6 +33,18 @@ const docTemplate = `{
                             "items": {
                                 "$ref": "#/definitions/dto.FillingResponse"
                             }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/core_response.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/core_response.ErrorResponse"
                         }
                     },
                     "500": {
