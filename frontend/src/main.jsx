@@ -218,7 +218,7 @@ function orderTabForStatus(status) {
 
 function orderStatusLabel(status) {
   return {
-    accepted: "Принят",
+    accepted: "Новый",
     processing: "В работе",
     ready: "Готов",
     cancelled: "Отменён"
@@ -944,7 +944,7 @@ function App() {
                             changeOrderStatus(order.id, status);
                           }}
                         >
-                          <option value="accepted">Принят</option>
+                          <option value="accepted">Новый</option>
                           <option value="processing">В процессе</option>
                           <option value="ready">Готов</option>
                           <option value="cancelled">Отменён</option>
@@ -973,7 +973,15 @@ function App() {
 
 
             {role === "admin" && (
-              <button className="button button-light" onClick={() => setAddOpen(true)}>
+              <button
+                className="button button-light"
+                onClick={() => {
+                  setFillingModalMode("create");
+                  setEditingFilling(null);
+                  setFillingForm({ name: "", description: "", price: "" });
+                  setAddOpen(true);
+                }}
+              >
                 <Plus size={17} /> Добавить начинку
               </button>
             )}
@@ -1515,7 +1523,12 @@ function App() {
       {addOpen && (
         <Modal
           title={fillingModalMode === "edit" ? "Редактировать начинку" : "Добавить начинку"}
-          onClose={() => setAddOpen(false)}
+          onClose={() => {
+            setAddOpen(false);
+            setFillingModalMode("create");
+            setEditingFilling(null);
+            setFillingForm({ name: "", description: "", price: "" });
+          }}
         >
           <form onSubmit={fillingModalMode === "edit" ? saveEditedFilling : addFilling}>
             
