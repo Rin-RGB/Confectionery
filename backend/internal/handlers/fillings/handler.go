@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"image/png"
 	"io"
+	"mime"
 	"net/http"
 	"strconv"
 	"strings"
@@ -204,13 +205,17 @@ func (h *Handler) parseCreateFillingRequest(request *http.Request) (dto.CreateFi
 
 // UpdateFilling частично обновляет начинку.
 // @Summary Изменение начинки
-// @Description Доступно только администратору. Пустой JSON-объект возвращает начинку без изменений.
+// @Description Доступно только администратору. Изображение передаётся файлом image (PNG до 8 МиБ) в multipart/form-data. Для остальных полей также поддерживается JSON. Не переданные поля сохраняются; пустое description очищает описание. image_name напрямую не изменяется.
 // @Tags fillings
-// @Accept json
+// @Accept multipart/form-data,json
 // @Produce json
 // @Security BearerAuth
 // @Param fillingId path string true "UUID начинки" Format(uuid)
-// @Param request body dto.UpdateFillingRequest true "Изменяемые поля"
+// @Param name formData string false "Название начинки"
+// @Param description formData string false "Описание начинки"
+// @Param price formData number false "Цена за килограмм"
+// @Param is_active formData boolean false "Активность начинки"
+// @Param image formData file false "Новое изображение PNG (до 8 МиБ)"
 // @Success 200 {object} dto.FillingResponse
 // @Failure 400 {object} core_response.ErrorResponse
 // @Failure 401 {object} core_response.ErrorResponse
@@ -219,8 +224,9 @@ func (h *Handler) parseCreateFillingRequest(request *http.Request) (dto.CreateFi
 // @Failure 500 {object} core_response.ErrorResponse
 // @Router /api/v1/fillings/{fillingId} [patch]
 func (h *Handler) UpdateFilling(writer *core_response.Writer, request *http.Request) {
-	var body dto.UpdateFillingRequest
-	if err := core_request.DecodeAndValidate(request, &body, h.validator); err != nil {
+	request.Body = http.MaxBytesReader(writer, request.Body, maxMultipartBodySize)
+	body, image, err := h.parseUpdateFillingRequest(request)
+	if err != nil {
 		writer.ErrorResponse(err)
 		return
 	}
@@ -229,6 +235,7 @@ func (h *Handler) UpdateFilling(writer *core_response.Writer, request *http.Requ
 		request.Context(),
 		request.PathValue("fillingId"),
 		dto.UpdateFillingRequestToDomain(body),
+		image,
 	)
 	if err != nil {
 		writer.ErrorResponse(err)
@@ -236,6 +243,72 @@ func (h *Handler) UpdateFilling(writer *core_response.Writer, request *http.Requ
 	}
 
 	writer.WriteJson(http.StatusOK, dto.FillingResponseFromDomain(filling))
+}
+
+func (h *Handler) parseUpdateFillingRequest(request *http.Request) (dto.UpdateFillingRequest, []byte, error) {
+	var body dto.UpdateFillingRequest
+	mediaType, _, err := mime.ParseMediaType(request.Header.Get("Content-Type"))
+	if err != nil {
+		return body, nil, fmt.Errorf("invalid content type: %w", coreerrors.ErrInvalidRequest)
+	}
+	if mediaType == "application/json" {
+		err := core_request.DecodeAndValidate(request, &body, h.validator)
+		return body, nil, err
+	}
+	if mediaType != "multipart/form-data" {
+		return body, nil, fmt.Errorf("expected JSON or multipart form: %w", coreerrors.ErrInvalidRequest)
+	}
+	if err := request.ParseMultipartForm(maxFillingImageSize); err != nil {
+		return body, nil, fmt.Errorf("parse filling patch: %v: %w", err, coreerrors.ErrInvalidRequest)
+	}
+	defer request.MultipartForm.RemoveAll()
+	optionalString := func(key string) *string {
+		if values, ok := request.MultipartForm.Value[key]; ok && len(values) > 0 {
+			return &values[0]
+		}
+		return nil
+	}
+	if optionalString("image_name") != nil {
+		return body, nil, fmt.Errorf("upload image instead of image_name: %w", coreerrors.ErrInvalidRequest)
+	}
+	body.Name = optionalString("name")
+	body.Description = optionalString("description")
+	if value := optionalString("price"); value != nil {
+		price, err := strconv.ParseFloat(*value, 64)
+		if err != nil {
+			return body, nil, fmt.Errorf("invalid price: %w", coreerrors.ErrInvalidRequest)
+		}
+		body.Price = &price
+	}
+	if value := optionalString("is_active"); value != nil {
+		active, err := strconv.ParseBool(*value)
+		if err != nil {
+			return body, nil, fmt.Errorf("invalid is_active: %w", coreerrors.ErrInvalidRequest)
+		}
+		body.IsActive = &active
+	}
+	var image []byte
+	if photos := request.MultipartForm.File["image"]; len(photos) > 0 {
+		if len(photos) != 1 {
+			return body, nil, fmt.Errorf("expected one image: %w", coreerrors.ErrInvalidRequest)
+		}
+		file, err := photos[0].Open()
+		if err != nil {
+			return body, nil, fmt.Errorf("open image: %v: %w", err, coreerrors.ErrInvalidRequest)
+		}
+		defer file.Close()
+		image, err = io.ReadAll(io.LimitReader(file, maxFillingImageSize+1))
+		if err != nil || len(image) == 0 || len(image) > maxFillingImageSize {
+			return body, nil, fmt.Errorf("image must be between 1 byte and 8 MiB: %w", coreerrors.ErrInvalidRequest)
+		}
+		if _, err := png.DecodeConfig(bytes.NewReader(image)); err != nil {
+			return body, nil, fmt.Errorf("image must be PNG: %w", coreerrors.ErrInvalidRequest)
+		}
+	}
+	if err := h.validator.Struct(body); err != nil {
+		return body, nil, fmt.Errorf("validate filling patch: %v: %w", err, coreerrors.ErrInvalidRequest)
+	}
+	return body, image, nil
 }
 
 // DeleteFilling скрывает начинку.

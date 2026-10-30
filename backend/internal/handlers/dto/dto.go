@@ -42,7 +42,6 @@ type UpdateFillingRequest struct {
 	Name        *string  `json:"name" validate:"omitempty,max=150" minLength:"1" maxLength:"150"`
 	Description *string  `json:"description"`
 	Price       *float64 `json:"price" validate:"omitempty,gt=0" minimum:"0.01" example:"1200"`
-	ImageName   *string  `json:"image_name" example:"filling1.png"`
 	IsActive    *bool    `json:"is_active"`
 }
 

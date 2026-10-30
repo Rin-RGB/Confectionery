@@ -34,7 +34,6 @@ func UpdateFillingRequestToDomain(request UpdateFillingRequest) domain.FillingPa
 		Name:        request.Name,
 		Description: request.Description,
 		Price:       request.Price,
-		ImageName:   request.ImageName,
 		IsActive:    request.IsActive,
 	}
 }

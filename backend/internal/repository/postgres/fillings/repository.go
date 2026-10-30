@@ -29,7 +29,7 @@ func (r *Repository) GetFillings(ctx context.Context, onlyActive bool) ([]domain
 			COALESCE(image_name, ''), is_active
 		FROM fillings
 		WHERE NOT $1 OR is_active = TRUE
-		ORDER BY created_at DESC
+		ORDER BY created_at ASC, id ASC
 	`
 	rows, err := r.txManager.GetExecutor(queryContext).Query(queryContext, query, onlyActive)
 	if err != nil {

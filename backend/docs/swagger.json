@@ -244,8 +244,9 @@
                         "BearerAuth": []
                     }
                 ],
-                "description": "Доступно только администратору. Пустой JSON-объект возвращает начинку без изменений.",
+                "description": "Доступно только администратору. Изображение передаётся файлом image (PNG до 8 МиБ) в multipart/form-data. Для остальных полей также поддерживается JSON. Не переданные поля сохраняются; пустое description очищает описание. image_name напрямую не изменяется.",
                 "consumes": [
+                    "multipart/form-data",
                     "application/json"
                 ],
                 "produces": [
@@ -265,13 +266,34 @@
                         "required": true
                     },
                     {
-                        "description": "Изменяемые поля",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/dto.UpdateFillingRequest"
-                        }
+                        "type": "string",
+                        "description": "Название начинки",
+                        "name": "name",
+                        "in": "formData"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Описание начинки",
+                        "name": "description",
+                        "in": "formData"
+                    },
+                    {
+                        "type": "number",
+                        "description": "Цена за килограмм",
+                        "name": "price",
+                        "in": "formData"
+                    },
+                    {
+                        "type": "boolean",
+                        "description": "Активность начинки",
+                        "name": "is_active",
+                        "in": "formData"
+                    },
+                    {
+                        "type": "file",
+                        "description": "Новое изображение PNG (до 8 МиБ)",
+                        "name": "image",
+                        "in": "formData"
                     }
                 ],
                 "responses": {
@@ -1282,31 +1304,6 @@
                 },
                 "refresh_token": {
                     "type": "string"
-                }
-            }
-        },
-        "dto.UpdateFillingRequest": {
-            "type": "object",
-            "properties": {
-                "description": {
-                    "type": "string"
-                },
-                "image_name": {
-                    "type": "string",
-                    "example": "filling1.png"
-                },
-                "is_active": {
-                    "type": "boolean"
-                },
-                "name": {
-                    "type": "string",
-                    "maxLength": 150,
-                    "minLength": 1
-                },
-                "price": {
-                    "type": "number",
-                    "minimum": 0.01,
-                    "example": 1200
                 }
             }
         },

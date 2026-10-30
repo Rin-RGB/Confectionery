@@ -118,7 +118,7 @@ func removeImage(imagePath string) error {
 	return nil
 }
 
-func (s *Service) UpdateFilling(ctx context.Context, fillingID string, patch domain.FillingPatch) (domain.Filling, error) {
+func (s *Service) UpdateFilling(ctx context.Context, fillingID string, patch domain.FillingPatch, image []byte) (domain.Filling, error) {
 	if _, err := uuid.Parse(fillingID); err != nil {
 		return domain.Filling{}, fmt.Errorf("invalid filling id: %w", coreerrors.ErrInvalidRequest)
 	}
@@ -136,9 +136,36 @@ func (s *Service) UpdateFilling(ctx context.Context, fillingID string, patch dom
 	if patch.Price != nil && *patch.Price <= 0 {
 		return domain.Filling{}, coreerrors.ErrInvalidRequest
 	}
-	if patch.ImageName != nil {
-		imageName := strings.TrimSpace(*patch.ImageName)
+	// Only uploaded files may change the image reference.
+	patch.ImageName = nil
+	if image != nil {
+		if len(image) == 0 {
+			return domain.Filling{}, coreerrors.ErrInvalidRequest
+		}
+		// Confirm existence before creating a file; the repository also allows hidden fillings.
+		if _, err := s.fillingsRepo.GetFillingByID(ctx, fillingID); err != nil {
+			return domain.Filling{}, fmt.Errorf("get filling before image update: %w", err)
+		}
+		if err := os.MkdirAll(s.imagesDirectory, 0o755); err != nil {
+			return domain.Filling{}, fmt.Errorf("create fillings image directory: %w", err)
+		}
+		imageName := fillingID + "_" + uuid.NewString() + ".png"
+		imagePath := filepath.Join(s.imagesDirectory, imageName)
+		file, err := os.OpenFile(imagePath, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
+		if err != nil {
+			return domain.Filling{}, fmt.Errorf("create replacement image: %w", err)
+		}
+		_, writeErr := file.Write(image)
+		closeErr := file.Close()
+		if err := errors.Join(writeErr, closeErr); err != nil {
+			return domain.Filling{}, errors.Join(err, removeImage(imagePath))
+		}
 		patch.ImageName = &imageName
+		updated, err := s.fillingsRepo.UpdateFilling(ctx, fillingID, patch)
+		if err != nil {
+			return domain.Filling{}, errors.Join(fmt.Errorf("update filling image: %w", err), removeImage(imagePath))
+		}
+		return updated, nil
 	}
 
 	updatedFilling, err := s.fillingsRepo.UpdateFilling(ctx, fillingID, patch)

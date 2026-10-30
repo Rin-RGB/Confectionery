@@ -194,24 +194,6 @@ definitions:
       refresh_token:
         type: string
     type: object
-  dto.UpdateFillingRequest:
-    properties:
-      description:
-        type: string
-      image_name:
-        example: filling1.png
-        type: string
-      is_active:
-        type: boolean
-      name:
-        maxLength: 150
-        minLength: 1
-        type: string
-      price:
-        example: 1200
-        minimum: 0.01
-        type: number
-    type: object
   dto.UpdateOrderStatusRequest:
     properties:
       decline_reason:
@@ -386,9 +368,12 @@ paths:
       - fillings
     patch:
       consumes:
+      - multipart/form-data
       - application/json
-      description: Доступно только администратору. Пустой JSON-объект возвращает начинку
-        без изменений.
+      description: Доступно только администратору. Изображение передаётся файлом image
+        (PNG до 8 МиБ) в multipart/form-data. Для остальных полей также поддерживается
+        JSON. Не переданные поля сохраняются; пустое description очищает описание.
+        image_name напрямую не изменяется.
       parameters:
       - description: UUID начинки
         format: uuid
@@ -396,12 +381,26 @@ paths:
         name: fillingId
         required: true
         type: string
-      - description: Изменяемые поля
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/dto.UpdateFillingRequest'
+      - description: Название начинки
+        in: formData
+        name: name
+        type: string
+      - description: Описание начинки
+        in: formData
+        name: description
+        type: string
+      - description: Цена за килограмм
+        in: formData
+        name: price
+        type: number
+      - description: Активность начинки
+        in: formData
+        name: is_active
+        type: boolean
+      - description: Новое изображение PNG (до 8 МиБ)
+        in: formData
+        name: image
+        type: file
       produces:
       - application/json
       responses:
