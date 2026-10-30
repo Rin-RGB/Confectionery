@@ -468,7 +468,12 @@ function App() {
       setNotice(authMode === "register" ? "Регистрация выполнена." : "Вы вошли в аккаунт.");
       await loadOrders();
     } catch (error) {
-      setNotice("Пользователь не найден. Проверьте почту или пароль.");
+        if (error.message === "error during transaction: failed to create user: email is already in use") {
+          setNotice("Пользователь с такой почтой уже существует.")
+        } 
+        if (error.message === "error during transaction: get user: invalid email or password") {
+          setNotice("Ошибка при авторизации: проверьте почту или пароль.");
+        }
     } finally {
       setAuthLoading(false);
     }
