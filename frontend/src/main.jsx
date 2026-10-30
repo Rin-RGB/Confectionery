@@ -314,6 +314,7 @@ function App() {
     description: "",
     price: ""
   });
+  const [fillingImage, setFillingImage] = useState(null);
   const [authUser, setAuthUser] = useState(() => {
     const token = authStorage.getAccess();
     return token ? decodeJwt(token) : null;
@@ -651,6 +652,38 @@ function App() {
     event.target.value = "";
   }
 
+  async function handleFillingImageChange(event) {
+    const file = event.target.files?.[0];
+
+    if (!file) return;
+
+    if (file.type !== "image/png") {
+      setNotice("Пока поддерживается только PNG.");
+      event.target.value = "";
+      return;
+    }
+
+    if (file.size > 8 * 1024 * 1024) {
+      setNotice("Размер изображения не должен превышать 8 МБ.");
+      event.target.value = "";
+      return;
+    }
+
+    const preview = await readImageAsDataUrl(file);
+
+    setFillingImage({
+      file,
+      name: preview.name,
+      dataUrl: preview.dataUrl
+    });
+
+    event.target.value = "";
+  }
+
+  function removeFillingImage() {
+    setFillingImage(null);
+  }
+
   function removePhoto(index) {
     setPhotos((current) => current.filter((_, i) => i !== index));
   }
@@ -659,16 +692,30 @@ function App() {
     event.preventDefault();
 
     const form = new FormData(event.currentTarget);
-    const image = form.get("image");
 
-    if (!(image instanceof File) || !image.size) {
-      setNotice("Для новой начинки выберите PNG-картинку.");
+    if (!fillingImage?.file) {
+      setNotice("Выберите изображение начинки.");
+      return;
+    }
+
+    form.set("image", fillingImage.file);
+
+    const image = fillingImage.file;
+
+    if (image.type !== "image/png") {
+      setNotice("Изображение должно быть в формате PNG.");
+      return;
+    }
+
+    if (image.size > 8 * 1024 * 1024) {
+      setNotice("Размер изображения не должен превышать 8 МБ.");
       return;
     }
 
     try {
       await api.createFilling(form);
       setAddOpen(false);
+      setFillingImage(null);
       setNotice("Начинка добавлена.");
       await loadFillings();
     } catch (error) {
@@ -680,11 +727,14 @@ function App() {
   function editFilling(filling) {
     setFillingModalMode("edit");
     setEditingFilling(filling);
+    setFillingImage(null);
+
     setFillingForm({
       name: filling.name || "",
       description: filling.note || "",
       price: String(filling.price ?? "")
     });
+
     setAddOpen(true);
   }
 
@@ -703,24 +753,36 @@ function App() {
       return;
     }
 
-    try {
-      const updated = await api.updateFilling(editingFilling.id, {
-        name,
-        description,
-        price
-      });
+    if (fillingImage?.file) {
+      if (fillingImage.file.type !== "image/png") {
+        setNotice("Изображение должно быть в формате PNG.");
+        return;
+      }
 
-      const normalized = normalizeFillings([updated])[0] || {
-        ...editingFilling,
-        name,
-        note: description,
-        price
-      };
+      if (fillingImage.file.size > 8 * 1024 * 1024) {
+        setNotice("Размер изображения не должен превышать 8 МБ.");
+        return;
+      }
+    }
+
+    try {
+      const form = new FormData();
+      form.append("name", name);
+      form.append("description", description);
+      form.append("price", String(price));
+
+      if (fillingImage?.file) {
+        form.append("image", fillingImage.file);
+      }
+
+      const updated = await api.updateFilling(editingFilling.id, form);
+
+      const normalized = normalizeFillings([updated])[0];
 
       setFillings((current) => {
         const next = current.map((item) =>
           item.id === editingFilling.id
-            ? { ...item, ...normalized, is_active: editingFilling.is_active }
+            ? { ...item, ...normalized }
             : item
         );
 
@@ -733,7 +795,11 @@ function App() {
 
       setAddOpen(false);
       setEditingFilling(null);
+      setFillingImage(null);
+      setFillingModalMode("create");
       setNotice("Начинка обновлена.");
+
+      await loadFillings();
     } catch (error) {
       setNotice(`Не удалось изменить начинку: ${error.message}`);
     }
@@ -1425,7 +1491,7 @@ function App() {
           </span>
 
           <span>
-            © 2025 Каприз. Все права защищены.
+            © 2026 Каприз. Все права защищены.
           </span>
         </div>
       </footer>
@@ -1528,6 +1594,7 @@ function App() {
             setFillingModalMode("create");
             setEditingFilling(null);
             setFillingForm({ name: "", description: "", price: "" });
+            setFillingImage(null);
           }}
         >
           <form onSubmit={fillingModalMode === "edit" ? saveEditedFilling : addFilling}>
@@ -1589,35 +1656,100 @@ function App() {
               />
 
             
-            <label htmlFor="filling-image" className="reference-upload">
-              <span className="reference-upload__icon">＋</span>
-              <span className="reference-upload__title">
-                {fillingModalMode === "edit"
-                  ? "Заменить изображение"
-                  : "Выбрать изображение"}
-              </span>
-              <span className="reference-upload__hint">Формат PNG</span>
-            </label>
+            <div className="form-block">
+              <label className="modal-label">Изображение начинки</label>
 
-            <input
-              id="filling-image"
-              className="reference-input"
-              name="image"
-              type="file"
-              accept="image/png"
-              required={fillingModalMode === "create"}
-              hidden
-            />
+              {fillingModalMode === "create" && (
+                <>
+                  {!fillingImage ? (
+                    <>
+                      <label
+                        htmlFor="filling-image-upload"
+                        className="reference-upload"
+                      >
+                        <span className="reference-upload__icon">＋</span>
+                        <span className="reference-upload__title">
+                          Добавить изображение
+                        </span>
+                        <span className="reference-upload__hint">
+                          PNG, до 8 МБ
+                        </span>
+                      </label>
 
-            <label className="modal-label" htmlFor="filling-image">Изображение (PNG)</label>
-            <input
-              className="modal-file"
-              id="filling-image"
-              name="image"
-              type="file"
-              accept="image/png"
-              required={fillingModalMode === "create"}
-            />
+                      <input
+                        id="filling-image-upload"
+                        className="reference-input"
+                        type="file"
+                        accept="image/png"
+                        onChange={handleFillingImageChange}
+                        required={!fillingImage}
+                      />
+                    </>
+                  ) : (
+                    <div className="reference-grid">
+                      <div className="reference-item">
+                        <img
+                          src={fillingImage.dataUrl}
+                          alt={fillingImage.name}
+                        />
+                        <button
+                          type="button"
+                          onClick={removeFillingImage}
+                          aria-label="Удалить изображение"
+                        >
+                          <X size={14} />
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+
+              {fillingModalMode === "edit" && (
+                <>
+                  <div className="reference-grid">
+                    {(fillingImage?.dataUrl || editingFilling?.image_url) && (
+                      <div className="reference-item">
+                        <img
+                          src={fillingImage?.dataUrl || editingFilling.image_url}
+                          alt="Изображение начинки"
+                        />
+
+                        <button
+                          type="button"
+                          onClick={removeFillingImage}
+                          aria-label="Удалить выбранное новое изображение"
+                        >
+                          <X size={14} />
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                  <label
+                    htmlFor="filling-image-edit"
+                    className="reference-upload"
+                  >
+                    <span className="reference-upload__icon">＋</span>
+                    <span className="reference-upload__title">
+                      Заменить изображение
+                    </span>
+                    <span className="reference-upload__hint">
+                      PNG, до 8 МБ
+                    </span>
+                  </label>
+
+                  <input
+                    id="filling-image-edit"
+                    className="reference-input"
+                    type="file"
+                    accept="image/png"
+                    onChange={handleFillingImageChange}
+                  />
+                </>
+              )}
+            </div>
+
             <button className="button button-accent modal-submit">
               {fillingModalMode === "edit" ? "Сохранить изменения" : "Добавить на сервер"}
             </button>

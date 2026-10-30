@@ -1451,13 +1451,6 @@ textarea::placeholder, input::placeholder { color: rgba(48,26,6,.38); }
   gap: 10px;
 }
 
-
-#filling-image,
-input[name="image"][type="file"] {
-  display: none !important;
-}
-
-
 .filling-form-input {
   display: block;
   width: 100%;

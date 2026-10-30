@@ -152,7 +152,9 @@ export const api = {
   updateFilling(id, payload) {
     return rawRequest(`/fillings/${encodeURIComponent(id)}`, {
       method: "PATCH",
-      body: JSON.stringify(payload)
+      body: payload instanceof FormData
+        ? payload
+        : JSON.stringify(payload)
     });
   },
 
