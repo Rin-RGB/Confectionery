@@ -136,6 +136,7 @@ const MOCK_FILLINGS = [
   }
 ];
 
+
 function formatPrice(value) {
   return new Intl.NumberFormat("ru-RU").format(Number(value) || 0) + " ₽";
 }
@@ -153,9 +154,9 @@ function normalizeFillings(payload) {
   const list = Array.isArray(payload)
     ? payload
     : payload?.fillings ||
-    payload?.items ||
-    payload?.data ||
-    [];
+      payload?.items ||
+      payload?.data ||
+      [];
 
   return list
     .map((item) => ({
@@ -169,18 +170,26 @@ function normalizeFillings(payload) {
         item.Price ??
         0
       ),
-      note: item.description ?? item.Description ?? "",
+      note:
+        item.description ??
+        item.Description ??
+        "",
       image_url: item.image_name
         ? `http://localhost:8080/static/fillings/${item.image_name}`
         : "",
       is_active:
-        item.is_active ?? item.isActive ?? item.IsActive ?? true
+        item.is_active ??
+        item.isActive ??
+        item.IsActive ??
+        true
     }))
     .filter((item) => item.id && item.name);
 }
 
 function normalizeOrders(payload) {
-  const list = Array.isArray(payload) ? payload : [payload];
+  const list = Array.isArray(payload)
+    ? payload
+    : [payload];
 
   return list.map((item) => {
     const fillings = item.fillings ?? [];
@@ -188,9 +197,8 @@ function normalizeOrders(payload) {
     return {
       id: item.id,
       date: item.created_at,
-      filling: fillings.length
-        ? fillings.map((f) => f.name).filter(Boolean).join(", ")
-        : "—",
+      filling: fillings.length ? fillings.map((f) => f.name).filter(Boolean).join(", ") : "—",
+      fillings: fillings,
       weight: Number(item.weight_grams ?? 0) / 1000,
       price: Number(item.total_price ?? 0),
       status: item.status ?? "accepted",
@@ -209,16 +217,12 @@ function orderTabForStatus(status) {
 }
 
 function orderStatusLabel(status) {
-  return (
-    {
-      accepted: "Принят",
-      processing: "В работе",
-      ready: "Готов",
-      cancelled: "Отменён"
-    }[status] ||
-    status ||
-    "Статус уточняется"
-  );
+  return {
+    accepted: "Новый",
+    processing: "В работе",
+    ready: "Готов",
+    cancelled: "Отменён"
+  }[status] || status || "Статус уточняется";
 }
 
 function formatOrderDate(value) {
@@ -240,8 +244,7 @@ function OrderPhotoThumbnail({ orderId, fileName, onOpen }) {
   useEffect(() => {
     let objectUrl = "";
 
-    api
-      .getOrderPhoto(orderId, fileName)
+    api.getOrderPhoto(orderId, fileName)
       .then((blob) => {
         objectUrl = URL.createObjectURL(blob);
         setSrc(objectUrl);
@@ -275,14 +278,10 @@ function OrderPhotoThumbnail({ orderId, fileName, onOpen }) {
 
 function App() {
   const [fillings, setFillings] = useState(SAVED_FILLINGS);
-
-  const [selectedFillings, setSelectedFillings] = useState(() => {
-    if (Array.isArray(SAVED_DRAFT.selectedFillings))
-      return SAVED_DRAFT.selectedFillings;
-    if (SAVED_DRAFT.selectedFilling) return [SAVED_DRAFT.selectedFilling];
-    return [];
-  });
-
+  const [selectedFillings, setSelectedFillings] = useState(
+    SAVED_DRAFT.selectedFillings ??
+    (SAVED_DRAFT.selectedFilling ? [SAVED_DRAFT.selectedFilling] : [])
+  );
   const [weight, setWeight] = useState(Number(SAVED_DRAFT.weight) || 1);
   const [serverPrice, setServerPrice] = useState(null);
   const [priceLoading, setPriceLoading] = useState(false);
@@ -291,7 +290,9 @@ function App() {
   const [address, setAddress] = useState(SAVED_DRAFT.address || "");
   const [photos, setPhotos] = useState(SAVED_DRAFT.photos || []);
   const [orders, setOrders] = useState([]);
+  const [selectedOrder, setSelectedOrder] = useState(null);
   const [orderTab, setOrderTab] = useState("processing");
+  const [ordersOpen, setOrdersOpen] = useState(false);
   const [authOpen, setAuthOpen] = useState(false);
   const [authMode, setAuthMode] = useState("login");
   const [addOpen, setAddOpen] = useState(false);
@@ -305,6 +306,14 @@ function App() {
   const [paymentLoading, setPaymentLoading] = useState(false);
   const [paymentSuccess, setPaymentSuccess] = useState(false);
   const [paymentOrderId, setPaymentOrderId] = useState("");
+
+  const [fillingModalMode, setFillingModalMode] = useState("create");
+  const [editingFilling, setEditingFilling] = useState(null);
+  const [fillingForm, setFillingForm] = useState({
+    name: "",
+    description: "",
+    price: ""
+  });
   const [authUser, setAuthUser] = useState(() => {
     const token = authStorage.getAccess();
     return token ? decodeJwt(token) : null;
@@ -331,16 +340,17 @@ function App() {
           photos
         })
       );
-    } catch { }
+    } catch {
+      
+    }
   }, [selectedFillings, weight, design, noDesign, address, photos]);
 
   useEffect(() => {
     if (!selectedFillings.length || !fillings.length) return;
 
     setSelectedFillings((current) =>
-      current.map(
-        (selected) =>
-          fillings.find((item) => item.id === selected.id) || selected
+      current.map((selected) =>
+        fillings.find((item) => item.id === selected.id) || selected
       )
     );
   }, [fillings]);
@@ -348,9 +358,8 @@ function App() {
   const total =
     selectedFillings.reduce(
       (sum, filling) =>
-        sum +
-        (Number(filling.price || 0) * Number(weight)) /
-        selectedFillings.length,
+        sum + Number(filling.price || 0) *
+          Number(weight) / selectedFillings.length,
       0
     ) + (noDesign || !design.trim() ? 0 : 700);
 
@@ -379,19 +388,19 @@ function App() {
     try {
       const response = await api.getFillings();
       const serverFillings = normalizeFillings(response);
-      const cached = readLocalJson(FILLINGS_CACHE_KEY, []);
-      const byId = new Map(cached.map((item) => [String(item.id), item]));
 
-      serverFillings.forEach((item) => byId.set(String(item.id), item));
-      const merged = Array.from(byId.values());
+      setFillings(serverFillings);
 
-      setFillings(merged);
       try {
-        localStorage.setItem(FILLINGS_CACHE_KEY, JSON.stringify(merged));
-      } catch { }
+        localStorage.setItem(
+          FILLINGS_CACHE_KEY,
+          JSON.stringify(serverFillings)
+        );
+      } catch {}
     } catch (error) {
       const cached = readLocalJson(FILLINGS_CACHE_KEY, []);
       setFillings(cached);
+
       if (!cached.length) {
         setNotice(`Не удалось загрузить начинки: ${error.message}`);
       }
@@ -399,7 +408,7 @@ function App() {
       setLoading(false);
     }
   }
-
+  
   async function loadOrders() {
     try {
       const response =
@@ -407,7 +416,9 @@ function App() {
           ? await api.getAllOrders()
           : await api.getMyOrders();
 
-      const list = Array.isArray(response) ? response : [];
+      const list = Array.isArray(response)
+        ? response
+        : [];
 
       console.log("ORDERS FROM LIST:", list);
       const details = await Promise.all(
@@ -447,22 +458,22 @@ function App() {
     setAuthLoading(true);
 
     try {
-      const tokens =
-        authMode === "register"
-          ? await api.register(email, password)
-          : await api.login(email, password);
+      const tokens = authMode === "register"
+        ? await api.register(email, password)
+        : await api.login(email, password);
 
       authStorage.set(tokens);
       setAuthUser(decodeJwt(tokens.access_token));
       setAuthOpen(false);
-      setNotice(
-        authMode === "register"
-          ? "Регистрация выполнена."
-          : "Вы вошли в аккаунт."
-      );
+      setNotice(authMode === "register" ? "Регистрация выполнена." : "Вы вошли в аккаунт.");
       await loadOrders();
     } catch (error) {
-      setNotice(error.message);
+        if (error.message === "error during transaction: failed to create user: email is already in use") {
+          setNotice("Пользователь с такой почтой уже существует.")
+        } 
+        if (error.message === "error during transaction: get user: invalid email or password") {
+          setNotice("Ошибка при авторизации: проверьте почту или пароль.");
+        }
     } finally {
       setAuthLoading(false);
     }
@@ -484,7 +495,9 @@ function App() {
     if (!loggedIn) {
       setAuthMode("login");
       setAuthOpen(true);
-      setNotice("Для оформления заказа сначала войдите или зарегистрируйтесь.");
+      setNotice(
+        "Для оформления заказа сначала войдите или зарегистрируйтесь."
+      );
       return;
     }
 
@@ -503,7 +516,7 @@ function App() {
             name: filling.name,
             weight_grams: Math.round(
               (Number(weight) * 1000) / selectedFillings.length
-            )
+            ),
           }))
         )
       );
@@ -537,7 +550,9 @@ function App() {
   async function handleMockPayment() {
     setPaymentLoading(true);
 
-    await new Promise((resolve) => setTimeout(resolve, 1200));
+    await new Promise((resolve) =>
+      setTimeout(resolve, 1200)
+    );
 
     setPaymentLoading(false);
     setPaymentSuccess(true);
@@ -546,7 +561,9 @@ function App() {
 
   function toggleSelectedFilling(filling) {
     setSelectedFillings((current) => {
-      const alreadySelected = current.some((item) => item.id === filling.id);
+      const alreadySelected = current.some(
+        (item) => item.id === filling.id
+      );
 
       if (alreadySelected) {
         return current.filter((item) => item.id !== filling.id);
@@ -582,7 +599,7 @@ function App() {
         fillings: selectedFillings.map((filling) => ({
           name: filling.name,
           weight_grams: Math.round(
-            (Number(weight) * 1000) / selectedFillings.length
+            Number(weight) * 1000 / selectedFillings.length
           )
         }))
       });
@@ -596,7 +613,9 @@ function App() {
         response?.Price;
 
       setServerPrice(
-        price !== undefined && price !== null ? Number(price) : null
+        price !== undefined && price !== null
+          ? Number(price)
+          : null
       );
     } catch (error) {
       setServerPrice(null);
@@ -624,7 +643,7 @@ function App() {
       next.push({
         file,
         name: preview.name,
-        dataUrl: preview.dataUrl
+        dataUrl: preview.dataUrl,
       });
     }
 
@@ -657,52 +676,69 @@ function App() {
     }
   }
 
-  async function editFilling(filling) {
-    const name = window.prompt("Название начинки:", filling.name);
-    if (name === null) return;
+  
+  function editFilling(filling) {
+    setFillingModalMode("edit");
+    setEditingFilling(filling);
+    setFillingForm({
+      name: filling.name || "",
+      description: filling.note || "",
+      price: String(filling.price ?? "")
+    });
+    setAddOpen(true);
+  }
 
-    const description = window.prompt("Описание:", filling.note || "");
-    if (description === null) return;
 
-    const priceText = window.prompt("Цена за кг:", String(filling.price));
-    if (priceText === null) return;
+  async function saveEditedFilling(event) {
+    event.preventDefault();
 
-    const price = Number(priceText);
-    if (!name.trim() || !Number.isFinite(price) || price <= 0) {
+    if (!editingFilling) return;
+
+    const name = fillingForm.name.trim();
+    const description = fillingForm.description.trim();
+    const price = Number(fillingForm.price);
+
+    if (!name || !Number.isFinite(price) || price <= 0) {
       setNotice("Проверьте название и цену.");
       return;
     }
 
     try {
-      const updated = await api.updateFilling(filling.id, {
-        name: name.trim(),
-        description: description.trim(),
+      const updated = await api.updateFilling(editingFilling.id, {
+        name,
+        description,
         price
       });
 
       const normalized = normalizeFillings([updated])[0] || {
-        ...filling,
-        name: name.trim(),
-        note: description.trim(),
+        ...editingFilling,
+        name,
+        note: description,
         price
       };
 
       setFillings((current) => {
         const next = current.map((item) =>
-          item.id === filling.id
-            ? { ...item, ...normalized, is_active: filling.is_active }
+          item.id === editingFilling.id
+            ? { ...item, ...normalized, is_active: editingFilling.is_active }
             : item
         );
+
         try {
           localStorage.setItem(FILLINGS_CACHE_KEY, JSON.stringify(next));
-        } catch { }
+        } catch {}
+
         return next;
       });
+
+      setAddOpen(false);
+      setEditingFilling(null);
       setNotice("Начинка обновлена.");
     } catch (error) {
       setNotice(`Не удалось изменить начинку: ${error.message}`);
     }
   }
+
 
   async function toggleFilling(filling) {
     try {
@@ -714,50 +750,59 @@ function App() {
 
       setFillings((current) => {
         const next = current.map((item) =>
-          item.id === filling.id
-            ? { ...item, is_active: !filling.is_active }
-            : item
+          item.id === filling.id ? { ...item, is_active: !filling.is_active } : item
         );
         try {
           localStorage.setItem(FILLINGS_CACHE_KEY, JSON.stringify(next));
-        } catch { }
+        } catch {}
         return next;
       });
 
-      if (selectedFillings.some((item) => item.id === filling.id) && filling.is_active) {
-        setSelectedFillings((current) => current.filter((item) => item.id !== filling.id));
+      if (selectedFilling?.id === filling.id && filling.is_active) {
+        setSelectedFilling(null);
       }
 
-      setNotice(
-        filling.is_active ? "Начинка скрыта." : "Начинка снова доступна."
-      );
+      setNotice(filling.is_active ? "Начинка скрыта." : "Начинка снова доступна.");
     } catch (error) {
-      // setNotice(`Не удалось изменить доступность: ${error.message}`);
+      //setNotice(`Не удалось изменить доступность: ${error.message}`);
     }
   }
 
-  function resetOrderForm() {
+    function resetOrderForm() {
+      setSelectedFillings([]);
+      setWeight(1);
+      setDesign("");
+      setNoDesign(false);
+      setAddress("");
+      setPhotos([]);
+      setServerPrice(null);
+
+      try {
+        localStorage.removeItem(DRAFT_KEY);
+      } catch { }
+    }
+
+  const filteredOrders = orders.filter((order) => orderTabForStatus(order.status) === orderTab);
+  const role = authUser?.role;
+
+  
+  useEffect(() => {
+    if (role !== "admin") return;
+
     setSelectedFillings([]);
-    setWeight(1);
-    setDesign("");
-    setNoDesign(false);
-    setAddress("");
-    setPhotos([]);
-    setServerPrice(null);
 
     try {
-      localStorage.removeItem(DRAFT_KEY);
-    } catch { }
-  }
+      const draft = readLocalJson(DRAFT_KEY, {});
+      delete draft.selectedFilling;
+      delete draft.selectedFillings;
+      localStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
+    } catch {}
+  }, [role]);
 
-  const filteredOrders = orders.filter(
-    (order) => orderTabForStatus(order.status) === orderTab
-  );
-  const role = authUser?.role;
-  const visibleFillings =
-    role === "admin"
-      ? fillings
-      : fillings.filter((filling) => filling.is_active !== false);
+
+  const visibleFillings = role === "admin"
+    ? fillings
+    : fillings.filter((filling) => filling.is_active !== false);
   const imageFor = (filling) => filling.image_url || "/cake_header.jpg";
 
   async function changeOrderStatus(orderId, status, reason = "") {
@@ -767,7 +812,7 @@ function App() {
       setOrders((current) =>
         current.map((order) =>
           order.id === orderId
-            ? { ...order, status, declineReason: status === "cancelled" ? reason : order.declineReason }
+            ? { ...order, status }
             : order
         )
       );
@@ -775,13 +820,15 @@ function App() {
       setDeclineOrder(null);
       setDeclineReason("");
       setNotice(
-        status === "cancelled" ? "Заказ отменён." : "Статус заказа изменён."
+        status === "cancelled"
+          ? "Заказ отменён."
+          : "Статус заказа изменён."
       );
     } catch (error) {
       setNotice(`Не удалось изменить статус: ${error.message}`);
     }
   }
-
+  
   return (
     <div className="app-shell">
       <main id="top">
@@ -792,181 +839,148 @@ function App() {
           </div>
         </section>
 
-        <section className="content-section orders-section" id="orders">
-          <div className="section-heading">
-            <div>
-              <p className="eyebrow">Личный кабинет</p>
-              <h2>{authUser?.role === "admin" ? "Заказы" : "Ваши заказы"}</h2>
-            </div>
-
-            {loggedIn ? (
-              <div className="account-actions">
-                <span className="account-email">
-                  {authUser?.role === "admin"
-                    ? "Администратор"
-                    : "Личный кабинет"}
-                </span>
-                <button
-                  className="button button-light"
-                  onClick={() => handleLogout()}
-                >
-                  <LogOut size={17} /> Выйти
-                </button>
+          <section className="content-section orders-section" id="orders">
+            <div className="section-heading">
+              <div>
+                <p className="eyebrow">Личный кабинет</p>
+                <h2>{authUser?.role === "admin" ? "Заказы" : "Ваши заказы"}</h2>
               </div>
-            ) : (
-              <button
-                className="button button-light"
-                onClick={() => {
+
+              {loggedIn ? (
+                <div className="account-actions">
+                  <span className="account-email">{authUser?.role === "admin" ? "Администратор" : "Личный кабинет"}</span>
+                  <button className="button button-light" onClick={() => handleLogout()}>
+                    <LogOut size={17} /> Выйти
+                  </button>
+                </div>
+              ) : (
+                <button className="button button-light" onClick={() => {
                   setAuthMode("login");
                   setAuthOpen(true);
-                }}
-              >
-                <LogIn size={17} /> Войти
-              </button>
-            )}
-          </div>
+                }}>
+                  <LogIn size={17} /> Войти
+                </button>
+              )}
+            </div>
 
-          <div className="tabs" role="tablist">
-            {[
-              ["processing", "Активные"],
-              ["ready", "Готовые"],
-              ["cancelled", "Отменённые"]
-            ].map(([key, label]) => (
-              <button
-                key={key}
-                className={orderTab === key ? "tab active" : "tab"}
-                onClick={() => setOrderTab(key)}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
+            <div className="tabs" role="tablist">
+              {[
+                ["processing", "Активные"],
+                ["ready", "Готовые"],
+                ["cancelled", "Отменённые"]
+              ].map(([key, label]) => (
+                <button
+                  key={key}
+                  className={orderTab === key ? "tab active" : "tab"}
+                  onClick={() => setOrderTab(key)}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
 
-          <div className="orders-list">
-            {!loggedIn ? (
-              <div className="empty-state">
-                Войдите в аккаунт, чтобы увидеть свои заказы.
-              </div>
-            ) : filteredOrders.length === 0 ? (
-              <div className="empty-state">Здесь пока нет заказов.</div>
-            ) : (
-              filteredOrders.map((order) => (
-                <article className="order-row" key={order.id}>
-                  <div className="order-id">
-                    <span>Заказ</span>
-                    <strong>{order.id}</strong>
-                  </div>
-
-                  <div>
-                    <span className="order-muted">Дата</span>
-                    <strong>{formatOrderDate(order.date)}</strong>
-                  </div>
-
-                  <div>
-                    <span className="order-muted">Начинка</span>
-                    <strong>{order.filling}</strong>
-                  </div>
-
-                  <div>
-                    <span className="order-muted">Пожелания</span>
-                    <strong>{order.decoration || "—"}</strong>
-                  </div>
-
-                  {order.status === "cancelled" && (
-                    <div>
-                      <span className="order-muted">Причина отмены</span>
-                      <strong>{order.declineReason || "—"}</strong>
+            <div className="orders-list">
+              {!loggedIn ? (
+                <div className="empty-state">
+                  Войдите в аккаунт, чтобы увидеть свои заказы.
+                </div>
+              ) : filteredOrders.length === 0 ? (
+                <div className="empty-state">Здесь пока нет заказов.</div>
+              ) : (
+                filteredOrders.map((order) => (
+                  <article
+                    className="order-row order-row-clickable"
+                    key={order.id}
+                    onClick={() => setSelectedOrder(order)}
+                  >
+                    <div className="order-id">
+                      <span>Заказ</span>
+                      <strong>{order.id}</strong>
                     </div>
-                  )}
 
-                  {role === "admin" && (
-                    <div className="order-photos-cell">
-                      <span className="order-muted">Референсы</span>
-                      {order.referencePhotos?.length ? (
-                        <div className="order-photo-list">
-                          {order.referencePhotos.map((fileName) => (
-                            <OrderPhotoThumbnail
-                              key={fileName}
-                              orderId={order.id}
-                              fileName={fileName}
-                              onOpen={setPreviewPhoto}
-                            />
-                          ))}
-                        </div>
-                      ) : (
-                        <strong>—</strong>
+                    <div>
+                      <span className="order-muted">Дата</span>
+                      <strong>{formatOrderDate(order.date)}</strong>
+                    </div>
+
+                    {order.status === "cancelled" && (
+                      <div>
+                        <span className="order-muted">Причина отмены</span>
+                        <strong>{order.declineReason}</strong>
+                      </div>
+                    )}
+
+                    <div>
+                      <span className="order-muted">Адрес</span>
+                      <strong>{order.address}</strong>
+                    </div>
+
+                    <div className="order-right">
+                      <strong className="order-price">
+                        {formatPrice(order.price)}
+                      </strong>
+
+                      {role === "user" && (
+                        <span className={`order-status-badge status-${order.status}`}>
+                          {orderStatusLabel(order.status)}
+                        </span>
+                      )}
+
+                      {role === "admin" && (
+                        <select
+                          className="order-status-select"
+                          onClick={(event) => event.stopPropagation()}
+                          value={order.status}
+                          onChange={(event) => {
+                            const status = event.target.value;
+
+                            if (status === "cancelled") {
+                              setDeclineOrder(order);
+                              setDeclineReason("");
+                              event.target.value = order.status;
+                              return;
+                            }
+
+                            changeOrderStatus(order.id, status);
+                          }}
+                        >
+                          <option value="accepted">Новый</option>
+                          <option value="processing">В процессе</option>
+                          <option value="ready">Готов</option>
+                          <option value="cancelled">Отменён</option>
+                        </select>
                       )}
                     </div>
-                  )}
+                  </article>
+                ))
+              )}
+            </div>
+          </section>
 
-                  <div>
-                    <span className="order-muted">Вес</span>
-                    <strong>{order.weight} кг</strong>
-                  </div>
-
-                  <div>
-                    <span className="order-muted">Адрес</span>
-                    <strong>{order.address || "—"}</strong>
-                  </div>
-
-                  <div className="order-right">
-                    <strong className="order-price">
-                      {formatPrice(order.price)}
-                    </strong>
-
-                    {role !== "admin" && (<span
-                      className={`order-status-badge status-${order.status}`}
-                    >
-                      {orderStatusLabel(order.status)}
-                    </span>)}
-
-                    {role === "admin" && (
-                      <select
-                        className="order-status-select"
-                        value={order.status}
-                        onChange={(event) => {
-                          const status = event.target.value;
-
-                          if (status === "cancelled") {
-                            setDeclineOrder(order);
-                            setDeclineReason("");
-                            event.target.value = order.status;
-                            return;
-                          }
-
-                          changeOrderStatus(order.id, status);
-                        }}
-                      >
-                        <option value="accepted">Принят</option>
-                        <option value="processing">В работе</option>
-                        <option value="ready">Готов</option>
-                        <option value="cancelled">Отменён</option>
-                      </select>
-                    )}
-                  </div>
-                </article>
-              ))
-            )}
-          </div>
-        </section>
 
         <section className="content-section filling-section" id="filling">
           <div className="section-heading">
-            {role === "admin" && (
-              <div>
-                <h2>Начинки</h2>
-              </div>
-            )}
-            {role !== "admin" && (
-              <div>
-                <h2>Выберите начинку</h2>
-              </div>
-            )}
+              {role === "admin" && (
+                <div>
+                  <h2>Начинки</h2>
+                </div>
+              )}
+              {role !== "admin" && (
+                <div>
+                  <h2>Выберите начинку</h2>
+                </div>
+              )}
+
 
             {role === "admin" && (
               <button
                 className="button button-light"
-                onClick={() => setAddOpen(true)}
+                onClick={() => {
+                  setFillingModalMode("create");
+                  setEditingFilling(null);
+                  setFillingForm({ name: "", description: "", price: "" });
+                  setAddOpen(true);
+                }}
               >
                 <Plus size={17} /> Добавить начинку
               </button>
@@ -981,13 +995,10 @@ function App() {
                 <article
                   className={[
                     "filling-card",
-                    selectedFillings.some((item) => item.id === filling.id)
-                      ? "selected"
-                      : "",
+                    selectedFillings.some(
+                      (item) => item.id === filling.id) ? "selected" : "",
                     filling.is_active === false ? "inactive" : ""
-                  ]
-                    .filter(Boolean)
-                    .join(" ")}
+                  ].filter(Boolean).join(" ")}
                   key={filling.id}
                   role="button"
                   tabIndex={0}
@@ -1007,37 +1018,25 @@ function App() {
                         event.currentTarget.src = "/cake_header.jpg";
                       }}
                     />
+
                   </div>
                   <div className="filling-info">
                     <strong>{filling.name}</strong>
                     <small>{filling.note}</small>
-                    <b>{formatPrice(filling.price)} / кг</b>
-                    {role === "admin" && (
-                      <div
-                        className="admin-filling-actions"
-                        onClick={(event) => event.stopPropagation()}
-                      >
-                        <button
-                          type="button"
-                          className="admin-mini-button"
-                          onClick={() => editFilling(filling)}
-                        >
-                          <Pencil size={14} /> Редактировать
-                        </button>
-                        <button
-                          type="button"
-                          className="admin-mini-button"
-                          onClick={() => toggleFilling(filling)}
-                        >
-                          {filling.is_active ? (
-                            <EyeOff size={14} />
-                          ) : (
-                            <Eye size={14} />
-                          )}
-                          {filling.is_active ? "Скрыть" : "Вернуть"}
-                        </button>
-                      </div>
-                    )}
+                    <div className="filling-bottom">
+                      <b>{formatPrice(filling.price)} / кг</b>
+                      {role === "admin" && (
+                        <div className="admin-filling-actions" onClick={(event) => event.stopPropagation()}>
+                          <button type="button" className="admin-mini-button" onClick={() => editFilling(filling)}>
+                            <Pencil size={14} /> Редактировать
+                          </button>
+                          <button type="button" className="admin-mini-button" onClick={() => toggleFilling(filling)}>
+                            {filling.is_active ? <EyeOff size={14} /> : <Eye size={14} />}
+                            {filling.is_active ? "Скрыть" : "Вернуть"}
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </article>
               ))
@@ -1066,8 +1065,8 @@ function App() {
                   <div>
                     <strong>Комбинация 50/50</strong>
                     <span>
-                      Обе начинки будут в одном торте. Вес каждой —{" "}
-                      {Number(weight) / 2} кг.
+                      Обе начинки будут в одном торте. Вес каждой —
+                      {" "}{Number(weight) / 2} кг.
                     </span>
                   </div>
                 </div>
@@ -1102,9 +1101,7 @@ function App() {
               </div>
 
               <div className="form-block">
-                <label htmlFor="address">
-                  <MapPin size={17} /> Адрес доставки
-                </label>
+                <label htmlFor="address"><MapPin size={17} /> Адрес доставки</label>
                 <input
                   id="address"
                   value={address}
@@ -1112,11 +1109,9 @@ function App() {
                   placeholder="Город, улица, дом, квартира"
                 />
               </div>
-
+              
               <div className="form-block">
-                <label htmlFor="references">
-                  <ImagePlus size={17} /> Референсы
-                </label>
+                <label htmlFor="references"><ImagePlus size={17} /> Референсы</label>
                 <label htmlFor="references" className="reference-upload">
                   <span className="reference-upload__icon">＋</span>
                   <span className="reference-upload__title">
@@ -1132,22 +1127,13 @@ function App() {
                   multiple
                   onChange={handlePhotosChange}
                 />
-                <small className="field-hint">
-                  Можно прикрепить от 0 до 3 фото.
-                </small>
+                <small className="field-hint">Можно прикрепить от 0 до 3 фото.</small>
                 {photos.length > 0 && (
                   <div className="reference-grid">
                     {photos.map((photo, index) => (
-                      <div
-                        className="reference-item"
-                        key={`${photo.name}-${index}`}
-                      >
+                      <div className="reference-item" key={`${photo.name}-${index}`}>
                         <img src={photo.dataUrl} alt={photo.name} />
-                        <button
-                          type="button"
-                          onClick={() => removePhoto(index)}
-                          aria-label="Удалить фото"
-                        >
+                        <button type="button" onClick={() => removePhoto(index)} aria-label="Удалить фото">
                           <X size={14} />
                         </button>
                       </div>
@@ -1232,6 +1218,76 @@ function App() {
         )}
       </main>
 
+      {selectedOrder && (
+        <Modal
+          title={`Заказ №${selectedOrder.id}`}
+          onClose={() => setSelectedOrder(null)}
+        >
+          <div className="order-details-modal">
+            <div className="order-details-item">
+              <span className="order-muted">Дата</span>
+              <strong>{formatOrderDate(selectedOrder.date)}</strong>
+            </div>
+
+            <div className="order-details-item">
+              <span className="order-muted">Адрес доставки</span>
+              <strong>{selectedOrder.address || "—"}</strong>
+            </div>
+
+            <div className="order-details-item">
+              <span className="order-muted">Статус</span>
+              <strong>{orderStatusLabel(selectedOrder.status)}</strong>
+            </div>
+
+            <div className="order-details-item">
+              <span className="order-muted">Начинки</span>
+              <strong>{selectedOrder.filling || "—"}</strong>
+            </div>
+
+            <div className="order-details-item">
+              <span className="order-muted">Вес</span>
+              <strong>{selectedOrder.weight} кг</strong>
+            </div>
+
+            <div className="order-details-item">
+              <span className="order-muted">Стоимость</span>
+              <strong>{formatPrice(selectedOrder.price)}</strong>
+            </div>
+
+            <div className="order-details-item">
+              <span className="order-muted">Пожелания к оформлению</span>
+              <p>{selectedOrder.decoration || "Нет пожеланий"}</p>
+            </div>
+
+            {selectedOrder.status === "cancelled" && (
+              <div className="order-details-item">
+                <span className="order-muted">Причина отмены</span>
+                <p>{selectedOrder.declineReason || "Не указана"}</p>
+              </div>
+            )}
+
+            <div className="order-details-item">
+              <span className="order-muted">Фото-референсы</span>
+
+              {selectedOrder.referencePhotos?.length ? (
+                <div className="order-photo-list">
+                  {selectedOrder.referencePhotos.map((fileName) => (
+                    <OrderPhotoThumbnail
+                      key={fileName}
+                      orderId={selectedOrder.id}
+                      fileName={fileName}
+                      onOpen={setPreviewPhoto}
+                    />
+                  ))}
+                </div>
+              ) : (
+                <p>Референсы не прикреплены</p>
+              )}
+            </div>
+          </div>
+        </Modal>
+      )}
+
       {declineOrder && (
         <div className="modal-backdrop">
           <div
@@ -1242,11 +1298,15 @@ function App() {
           >
             <h2 id="decline-title">Причина отказа</h2>
 
-            <p>Укажите причину отмены заказа №{declineOrder.id}.</p>
+            <p>
+              Укажите причину отмены заказа №{declineOrder.id}.
+            </p>
 
             <textarea
               value={declineReason}
-              onChange={(event) => setDeclineReason(event.target.value)}
+              onChange={(event) =>
+                setDeclineReason(event.target.value)
+              }
               placeholder="Например: невозможно выполнить заказ в указанный срок"
               rows={4}
             />
@@ -1271,7 +1331,7 @@ function App() {
                     setNotice("Заполните поле причины отказа");
                     return;
                   }
-
+    
                   changeOrderStatus(
                     declineOrder.id,
                     "cancelled",
@@ -1288,70 +1348,87 @@ function App() {
 
       <footer className="site-footer">
         <div className="footer-inner">
+
           <div className="footer-brand">
             <h3>Каприз — кондитерская, Москва</h3>
-            <p>Свежие торты к вашему празднику</p>
+            <p>
+              Свежие торты к вашему празднику
+            </p>
           </div>
 
           <div className="footer-column">
             <h4>Контакты</h4>
 
             <p>
-              <a href="tel:+79001209267">+7 (900) 120-92-67</a>
+              <a href="tel:+79001209267">
+                +7 (900) 120-92-67
+              </a>
             </p>
 
             <p>
-              <a href="mailto:info@kapriz.ru">info@kapriz.ru</a>
+              <a href="mailto:info@kapriz.ru">
+                info@kapriz.ru
+              </a>
             </p>
           </div>
 
           <div className="footer-column">
             <h4>Адрес</h4>
 
-            <p>Москва, улица Тортиков, дом 1</p>
+            <p>
+              Москва, улица Тортиков, дом 1
+            </p>
 
             <h4>Часы работы</h4>
 
-            <p>ежедневно, 10:00 – 22:00</p>
+            <p>
+              ежедневно, 10:00 – 22:00
+            </p>
           </div>
 
           <div className="footer-column footer-wide">
             <div className="footer-cancel-box">
-              <h4>
-                <Mail size={16} /> Хотите отменить заказ?
-              </h4>
-              <p>
-                Напишите нам на{" "}
-                <a href="mailto:info@kapriz.ru">info@kapriz.ru</a>, указав
-                номер заказа.
-              </p>
+              <h4><Mail size={16} /> Хотите отменить заказ?</h4>
+              <p>Напишите нам на <a href="mailto:info@kapriz.ru">info@kapriz.ru</a>, указав номер заказа.</p>
             </div>
             <h4>Информация</h4>
 
             <p className="footer-links">
-              <a href="#">Политика конфиденциальности</a>
+              <a href="#">
+                Политика конфиденциальности
+              </a>
 
               <span> · </span>
 
-              <a href="#">Согласие на обработку ПД</a>
+              <a href="#">
+                Согласие на обработку ПД
+              </a>
             </p>
 
             <p className="allergens">
-              <strong>Аллергены:</strong> продукция может содержать следы
-              глютена, молока, яиц, орехов, сои, кунжута и какао. Состав
-              указан в карточках товаров.
+              <strong>Аллергены:</strong>{" "}
+              продукция может содержать следы
+              глютена, молока, яиц, орехов, сои,
+              кунжута и какао. Состав указан
+              в карточках товаров.
             </p>
 
             <p className="allergy-warning">
-              При аллергии сообщите нам до оформления заказа.
+              При аллергии сообщите нам до
+              оформления заказа.
             </p>
           </div>
+
         </div>
 
         <div className="footer-bottom">
-          <span>ООО «Каприз», ИНН 7727676767, Москва</span>
+          <span>
+            ООО «Каприз», ИНН 7727676767, Москва
+          </span>
 
-          <span>© 2025 Каприз. Все права защищены.</span>
+          <span>
+            © 2025 Каприз. Все права защищены.
+          </span>
         </div>
       </footer>
 
@@ -1359,17 +1436,13 @@ function App() {
         <div className="toast toast-visible">
           <Check size={18} />
           <span>{notice}</span>
-          <button onClick={() => setNotice("")}>
-            <X size={17} />
-          </button>
+          <button onClick={() => setNotice("")}><X size={17} /></button>
         </div>
       )}
 
       {authOpen && (
         <Modal
-          title={
-            authMode === "login" ? "Войти в личный кабинет" : "Создать аккаунт"
-          }
+          title={authMode === "login" ? "Войти в личный кабинет" : "Создать аккаунт"}
           onClose={() => setAuthOpen(false)}
         >
           <div className="auth-switch">
@@ -1388,44 +1461,14 @@ function App() {
           </div>
 
           <form onSubmit={submitAuth}>
-            <label className="modal-label" htmlFor="email">
-              Email
-            </label>
-            <input
-              className="modal-input"
-              id="email"
-              name="email"
-              type="email"
-              autoComplete="email"
-              placeholder="you@example.com"
-              required
-            />
+            <label className="modal-label" htmlFor="email">Email</label>
+            <input className="modal-input" id="email" name="email" type="email" autoComplete="email" placeholder="you@example.com" required />
 
-            <label className="modal-label" htmlFor="password">
-              Пароль
-            </label>
-            <input
-              className="modal-input"
-              id="password"
-              name="password"
-              type="password"
-              minLength="3"
-              autoComplete={
-                authMode === "login" ? "current-password" : "new-password"
-              }
-              placeholder="Минимум 3 символа"
-              required
-            />
+            <label className="modal-label" htmlFor="password">Пароль</label>
+            <input className="modal-input" id="password" name="password" type="password" minLength="3" autoComplete={authMode === "login" ? "current-password" : "new-password"} placeholder="Минимум 3 символа" required />
 
-            <button
-              className="button button-accent modal-submit"
-              disabled={authLoading}
-            >
-              {authLoading
-                ? "Подождите…"
-                : authMode === "login"
-                  ? "Войти"
-                  : "Зарегистрироваться"}
+            <button className="button button-accent modal-submit" disabled={authLoading}>
+              {authLoading ? "Подождите…" : authMode === "login" ? "Войти" : "Зарегистрироваться"}
             </button>
           </form>
         </Modal>
@@ -1446,7 +1489,9 @@ function App() {
                 Заказ <strong>#{paymentOrderId}</strong> создан.
               </p>
 
-              <p>Это тестовая оплата. Деньги реально не списываются.</p>
+              <p>
+                Это тестовая оплата. Деньги реально не списываются.
+              </p>
 
               <button
                 className="button button-accent modal-submit"
@@ -1458,7 +1503,9 @@ function App() {
             </>
           ) : (
             <>
-              <p>Спасибо за заказ!</p>
+              <p>
+                Спасибо за заказ!
+              </p>
 
               <p>
                 Номер заказа: <strong>#{paymentOrderId}</strong>
@@ -1476,55 +1523,97 @@ function App() {
       )}
 
       {addOpen && (
-        <Modal title="Добавить начинку" onClose={() => setAddOpen(false)}>
-          <form onSubmit={addFilling}>
-            <label className="modal-label" htmlFor="filling-name">
-              Название
-            </label>
-            <input
-              className="modal-input"
-              id="filling-name"
-              name="name"
-              placeholder="Фисташка"
-              required
-            />
+        <Modal
+          title={fillingModalMode === "edit" ? "Редактировать начинку" : "Добавить начинку"}
+          onClose={() => {
+            setAddOpen(false);
+            setFillingModalMode("create");
+            setEditingFilling(null);
+            setFillingForm({ name: "", description: "", price: "" });
+          }}
+        >
+          <form onSubmit={fillingModalMode === "edit" ? saveEditedFilling : addFilling}>
+            
+            
+              <label className="modal-label" htmlFor="filling-name">
+                Название начинки
+              </label>
+              <input
+                id="filling-name"
+                className="filling-form-input"
+                name="name"
+                placeholder="Например, Фисташка с малиной"
+                value={fillingForm.name}
+                onChange={(event) =>
+                  setFillingForm((current) => ({
+                    ...current,
+                    name: event.target.value
+                  }))
+                }
+                required
+              />
 
-            <label className="modal-label" htmlFor="filling-description">
-              Описание
-            </label>
-            <input
-              className="modal-input"
-              id="filling-description"
-              name="description"
-              placeholder="Фисташковый крем"
-            />
+              <label className="modal-label" htmlFor="filling-description">
+                Описание
+              </label>
+              <textarea
+                id="filling-description"
+                className="filling-form-input filling-form-textarea"
+                name="description"
+                placeholder="Расскажите о составе и вкусе начинки"
+                value={fillingForm.description}
+                onChange={(event) =>
+                  setFillingForm((current) => ({
+                    ...current,
+                    description: event.target.value
+                  }))
+                }
+              />
 
-            <label className="modal-label" htmlFor="filling-price">
-              Цена за кг
-            </label>
-            <input
-              className="modal-input"
-              id="filling-price"
-              name="price"
-              type="number"
-              min="0"
-              placeholder="1400"
-              required
-            />
+              <label className="modal-label" htmlFor="filling-price">
+                Цена, ₽
+              </label>
+              <input
+                id="filling-price"
+                className="filling-form-input"
+                name="price"
+                type="number"
+                min="1"
+                placeholder="1400"
+                value={fillingForm.price}
+                onChange={(event) =>
+                  setFillingForm((current) => ({
+                    ...current,
+                    price: event.target.value
+                  }))
+                }
+                required
+              />
 
-            <label className="modal-label" htmlFor="filling-image">
-              Изображение (PNG)
+            
+            <label htmlFor="filling-image" className="reference-upload">
+              <span className="reference-upload__icon">＋</span>
+              <span className="reference-upload__title">
+                {fillingModalMode === "edit"
+                  ? "Заменить изображение"
+                  : "Выбрать изображение"}
+              </span>
+              <span className="reference-upload__hint">Формат PNG</span>
             </label>
+
+            
+
+            <label className="modal-label" htmlFor="filling-image">Изображение (PNG)</label>
             <input
               className="modal-file"
               id="filling-image"
               name="image"
               type="file"
               accept="image/png"
-              required
+              required={fillingModalMode === "create"}
             />
             <button className="button button-accent modal-submit">
-              Добавить на сервер
+              {fillingModalMode === "edit" ? "Сохранить изменения" : "Добавить на сервер"}
             </button>
           </form>
         </Modal>
@@ -1537,9 +1626,7 @@ function Modal({ title, children, onClose }) {
   return (
     <div className="modal-backdrop" onMouseDown={onClose}>
       <div className="modal" onMouseDown={(e) => e.stopPropagation()}>
-        <button className="modal-close" onClick={onClose}>
-          <X size={20} />
-        </button>
+        <button className="modal-close" onClick={onClose}><X size={20} /></button>
         <h3>{title}</h3>
         {children}
       </div>
