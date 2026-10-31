@@ -1299,10 +1299,12 @@ function App() {
               <strong>{selectedOrder.address || "—"}</strong>
             </div>
 
-            <div className="order-details-item">
-              <span className="order-muted">Email пользователя</span>
-              <strong>{selectedOrder.email || "Не указан"}</strong>
-            </div>
+            {role === "admin" && (
+              <div className="order-details-item">
+                <span className="order-muted">Email пользователя</span>
+                <strong>{selectedOrder.email || "Не указан"}</strong>
+              </div>
+            )}
 
             <div className="order-details-item">
               <span className="order-muted">Статус</span>
