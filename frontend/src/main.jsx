@@ -196,6 +196,7 @@ function normalizeOrders(payload) {
 
     return {
       id: item.id,
+      email: item.user_email ?? item.UserEmail ?? "",
       date: item.created_at,
       filling: fillings.length ? fillings.map((f) => f.name).filter(Boolean).join(", ") : "—",
       fillings: fillings,
@@ -1296,6 +1297,11 @@ function App() {
             <div className="order-details-item">
               <span className="order-muted">Адрес доставки</span>
               <strong>{selectedOrder.address || "—"}</strong>
+            </div>
+
+            <div className="order-details-item">
+              <span className="order-muted">Email пользователя</span>
+              <strong>{selectedOrder.email || "Не указан"}</strong>
             </div>
 
             <div className="order-details-item">
