@@ -91,7 +91,7 @@ func main() {
 		txManager,
 		filepath.Join(cfg.ServerCfg.StaticFilesFolder, "fillings"),
 	)
-	ordersService := serviceorders.NewService(ordersRepository, fillingsRepository, txManager)
+	ordersService := serviceorders.NewService(ordersRepository, fillingsRepository, usersRepository, txManager)
 	requestValidator := validator.New()
 
 	authHandler := handlerauth.NewHandler(authService, requestValidator)

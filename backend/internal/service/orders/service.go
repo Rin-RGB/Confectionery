@@ -25,17 +25,20 @@ const (
 type Service struct {
 	orders    orderRepository
 	fillings  fillingRepository
+	users     userRepository
 	txManager txManager
 }
 
 func NewService(
 	orders orderRepository,
 	fillings fillingRepository,
+	users userRepository,
 	txManager txManager,
 ) *Service {
 	return &Service{
 		orders:    orders,
 		fillings:  fillings,
+		users:     users,
 		txManager: txManager,
 	}
 }
@@ -237,6 +240,12 @@ func (s *Service) GetOrderByID(ctx context.Context, userID, orderID string) (dom
 	if err != nil {
 		return domain.Order{}, err
 	}
+
+	user, err := s.users.GetByID(ctx, order.UserID)
+	if err != nil {
+		return domain.Order{}, fmt.Errorf("get order user: %w", err)
+	}
+	order.UserEmail = user.Email
 
 	fillings, err := s.orders.GetOrderFillings(ctx, orderID)
 	if err != nil {

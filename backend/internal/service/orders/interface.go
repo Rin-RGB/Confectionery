@@ -23,6 +23,10 @@ type txManager interface {
 	WithinTx(ctx context.Context, fn func(txCtx context.Context) error) error
 }
 
+type userRepository interface {
+	GetByID(ctx context.Context, userID string) (domain.User, error)
+}
+
 type fillingRepository interface {
 	GetFillings(ctx context.Context, onlyActive bool) ([]domain.Filling, error)
 	GetFillingByID(ctx context.Context, fillingID string) (domain.Filling, error)

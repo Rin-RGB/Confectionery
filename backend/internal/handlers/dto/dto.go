@@ -86,6 +86,7 @@ type OrderFillingResponse struct {
 type OrderResponse struct {
 	ID               string                 `json:"id" format:"uuid"`
 	UserID           string                 `json:"user_id" format:"uuid"`
+	UserEmail        string                 `json:"user_email" format:"email"`
 	Fillings         []OrderFillingResponse `json:"fillings"`
 	WeightGrams      int                    `json:"weight_grams" minimum:"1000" maximum:"7000"`
 	DecorationWishes string                 `json:"decoration_wishes"`

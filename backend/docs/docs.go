@@ -1202,6 +1202,10 @@ const docTemplate = `{
                 "updated_at": {
                     "type": "string"
                 },
+                "user_email": {
+                    "type": "string",
+                    "format": "email"
+                },
                 "user_id": {
                     "type": "string",
                     "format": "uuid"

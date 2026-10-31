@@ -40,6 +40,7 @@ type Price struct {
 type Order struct {
 	ID               string
 	UserID           string
+	UserEmail        string
 	IdempotencyKey   string
 	Fillings         []OrderFilling
 	WeightGrams      int

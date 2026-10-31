@@ -119,6 +119,9 @@ definitions:
         type: number
       updated_at:
         type: string
+      user_email:
+        format: email
+        type: string
       user_id:
         format: uuid
         type: string

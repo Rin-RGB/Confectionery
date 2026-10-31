@@ -99,6 +99,7 @@ func OrderResponseFromDomain(order domain.Order) OrderResponse {
 	return OrderResponse{
 		ID:               order.ID,
 		UserID:           order.UserID,
+		UserEmail:        order.UserEmail,
 		Fillings:         fillings,
 		WeightGrams:      order.WeightGrams,
 		DecorationWishes: order.DecorationWishes,
